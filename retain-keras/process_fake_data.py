@@ -2,6 +2,7 @@ import pickle
 import numpy as np
 import pandas as pd
 import math
+import matplotlib.pyplot as plt
 import sys
 from sklearn.model_selection import train_test_split
 
@@ -20,6 +21,11 @@ if __name__ == '__main__':
 
     mort = np.zeros(N)
     data=[]
+
+    health_track = np.zeros(N)
+    health_track_death = []
+    health_track_alive = []
+
     code_placeholder=np.zeros((N, TIME, 4))
     for n in range(N):
         health = np.zeros(TIME)
@@ -41,9 +47,25 @@ if __name__ == '__main__':
         mort[n] = np.random.binomial(1, 1/(1+math.exp(-1*(health[TIME-1]))))
 
         data.append(np.transpose(np.array([med1, med2, health])).tolist())
-        print('%d: %f %f %d' % (n, health[1], health[TIME-1], mort[n]))
+        health_track[n] = health[TIME-1]
+        if mort[n]:
+            health_track_death.append(health[TIME-1])
+        else:
+            health_track_alive.append(health[TIME-1])
+        #print('%d: %f %f %d' % (n, health[1], health[TIME-1], mort[n]))
 
     print(np.sum(mort))
+
+    plt.figure()
+    colors = ['orange', 'blue']
+    plt.hist([health_track_death, health_track_alive], bins='auto', label=colors)
+    plt.title("Health of patients expired vs not expired")
+    plt.show()
+
+    plt.figure()
+    plt.hist(health_track, bins='auto')
+    plt.title("Health of all patients")
+    plt.show()
     #all_data = pd.DataFrame(data={'codes': code_placeholder.tolist(), 'numerics':data}, columns=['codes', 'numerics']).reset_index()
     #all_targets = pd.DataFrame(data={'target': mort.tolist()},columns=['target']).reset_index()
 
