@@ -45,6 +45,7 @@ if __name__ == '__main__':
     out_directory = sys.argv[4]
     train_proportion = float(sys.argv[5])
 
+    # map pid to death: 1 if expired, 0 if not expired
     print('Collecting mortality information')
     pid_dod_map = {}
     infd = open(patients_file, 'r')
@@ -59,6 +60,8 @@ if __name__ == '__main__':
             pid_dod_map[pid] = 0
     infd.close()
 
+    # by patient ID, list all admission IDs
+    # admission ID maps to time
     print('Building pid-admission mapping, admission-date mapping')
     pid_adm_map = {} # pid (visitor) to list of admission ids
     adm_date_map = {} # admission id to date
@@ -74,6 +77,7 @@ if __name__ == '__main__':
         else: pid_adm_map[pid] = [adm_id]
     infd.close()
 
+    # for each admisssion, get the diagnoses
     print('Building admission-dxList mapping')
     adm_dx_map = {}
     adm_dx_map_3digit = {}
@@ -85,7 +89,6 @@ if __name__ == '__main__':
         
         dx_str = 'D_' + convert_to_icd9(tokens[4][1:-1])
         dx_str_3digit = 'D_' + convert_to_3digit_icd9(tokens[4][1:-1])
-        print('%s %s' % (dx_str, dx_str_3digit))
         if adm_id in adm_dx_map:
             adm_dx_map[adm_id].append(dx_str)
         else:
@@ -97,6 +100,8 @@ if __name__ == '__main__':
             adm_dx_map_3digit[adm_id] = [dx_str_3digit]
     infd.close()
 
+    # For every patient, sort by date the diagnosis map list
+    # pid_seq_map is a dictionary by patient id (pid) that has a list of tuples of (date, list of diagnoses)
     print('Building pid-sortedVisits mapping')
     pid_seq_map = {}
     pid_seq_map_3digit = {}

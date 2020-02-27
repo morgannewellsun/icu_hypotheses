@@ -7,7 +7,9 @@ import sys
 from sklearn.model_selection import train_test_split
 
 if __name__ == '__main__':
-    N_str = sys.argv[1]
+    out_directory = sys.argv[1]
+    N_str = sys.argv[2]
+    train_proportion = float(sys.argv[3])
 
     # data point t
     TIME = 30
@@ -24,6 +26,8 @@ if __name__ == '__main__':
     track_death_timestamp = []
 
     code_placeholder=np.zeros((N, TIME, 4))
+
+    all_seq = []
     for n in range(N):
         health_hold = 0.
         health = []
@@ -58,22 +62,13 @@ if __name__ == '__main__':
             track_alive_health.append(health[TIME-1])
             health_track.append(health[TIME-1])
 
-    print(med1)
-    print(med2)
+    #all_data = pd.DataFrame(data={'codes': code_placeholder.tolist(), 'numerics':data}, columns=['codes', 'numerics']).reset_index()
+    #all_targets = pd.DataFrame(data={'target': mort.tolist()},columns=['target']).reset_index()
 
-    print(len(track_death_health))
-    plt.figure()
-    colors = ['orange', 'black']
-    plt.hist([track_death_health, track_alive_health], bins='auto', label=colors)
-    plt.title("Health of patients expired vs not expired")
-    plt.show()
+    #data_train,data_test = train_test_split(all_data, train_size=train_proportion, random_state=12345)
+    #target_train,target_test = train_test_split(all_targets, train_size=train_proportion, random_state=12345)
 
-    plt.figure()
-    plt.hist(health_track, bins='auto')
-    plt.title("Health of all patients")
-    plt.show()
-
-    plt.figure()
-    plt.hist(track_death_timestamp, bins='auto')
-    plt.title("Time of death of expired patients")
-    plt.show()
+    #data_train.sort_index().to_pickle(out_directory+'/data_train.pkl')
+    #data_test.sort_index().to_pickle(out_directory+'/data_test.pkl')
+    #target_train.sort_index().to_pickle(out_directory+'/target_train.pkl')
+    #target_test.sort_index().to_pickle(out_directory+'/target_test.pkl')
