@@ -45,12 +45,12 @@ if __name__ == '__main__':
             # sigmoid on the latent health status
             mort = np.random.binomial(1, 1/(1+math.exp(health[i]/2+OFFSET+1)))
             if mort:
-                morts.append[1]
+                morts.append(1)
                 break
         
         patients.append(patient)
         if not mort:
-            morts.append[0]
+            morts.append(0)
 
     all_data = pd.DataFrame(data={'codes': patients}, columns=['codes']).reset_index()
     all_targets = pd.DataFrame(data={'target': morts},columns=['target']).reset_index()
