@@ -250,8 +250,8 @@ def create_callbacks(model, data, ARGS):
                 y_pred = [x[-1] for x in
                           self.model.predict_generator(self.generator,
                                                        verbose=0,
-                                                       use_multiprocessing=True,
-                                                       workers=5,
+                                                       use_multiprocessing=False,
+                                                       workers=ARGS.workers,
                                                        max_queue_size=5)]
                 score_roc = roc_auc_score(self.y_test, y_pred)
                 score_pr = average_precision_score(self.y_test, y_pred)
