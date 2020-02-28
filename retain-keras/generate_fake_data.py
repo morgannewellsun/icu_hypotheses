@@ -35,8 +35,8 @@ if __name__ == '__main__':
             visit = []
             med1 = max(np.random.normal(DOSAGE, 1), 0)
             med2 = max(np.random.normal(DOSAGE, 1), 0)
-            visit.append(min(max(0, int(med1*2)-5), 9))
-            visit.append(min(max(10, int(med2*2)+5), 19))
+            visit.append(min(max(0, int(med1*4)-11), 17))
+            visit.append(min(max(18, int(med2*4)+7), 36))
             
             health.append(np.random.normal(health[i-1] + 0.12 * med1 - 0.1 * med2, 0.1))
 
