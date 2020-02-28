@@ -25,7 +25,6 @@ if __name__ == '__main__':
 
     code_placeholder=np.zeros((N, TIME, 4))
     for n in range(N):
-        health_hold = 0.
         health = []
         med1 = []
         med2 = []
@@ -36,15 +35,11 @@ if __name__ == '__main__':
 
         # generate the latent stats from medication
         for i in range(1, TIME):
-            # randomly pick which medicine to give (binary equal chance)
-            if np.random.binomial(1, 0.5):
-                med1.append(max(np.random.normal(DOSAGE, 1), 0))
-                health.append(np.random.normal(health[i-1] + 0.12 * med1[-1], 0.1))
-            else:
-                med2.append(max(np.random.normal(DOSAGE, 1), 0))
-                health.append(np.random.normal(health[i-1] - 0.1 * med2[-1], 0.1))
 
-            #health.append(np.random.normal(health[i-1] + 0.12 * med1[i] - 0.1 * med2[i], 0.1))
+            med1.append(max(np.random.normal(DOSAGE, 1), 0))
+            med2.append(max(np.random.normal(DOSAGE, 1), 0))
+
+            health.append(np.random.normal(health[i-1] + 0.12 * med1[-1] - 0.1 * med2[-1], 0.1))
 
             # sigmoid on the latent health status
             mort = np.random.binomial(1, 1/(1+math.exp(health[i]/2+OFFSET+1)))

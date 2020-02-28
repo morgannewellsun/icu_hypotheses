@@ -18,57 +18,47 @@ if __name__ == '__main__':
 
     N = int(N_str)
 
-    data=[]
-
-    health_track = []
-    track_death_health = []
-    track_alive_health = []
-    track_death_timestamp = []
-
     code_placeholder=np.zeros((N, TIME, 4))
 
-    all_seq = []
+    patients = []
+    morts = []
+    # for every patient
     for n in range(N):
-        health_hold = 0.
         health = []
-        med1 = []
-        med2 = []
 
         health.append(np.random.normal() - OFFSET) # come in with lower health status
-        med1.append(np.random.normal(DOSAGE)) # correct meds
-        med2.append(np.random.normal(DOSAGE)) # wrong meds
 
+        patient = []
         # generate the latent stats from medication
+        # one visit
         for i in range(1, TIME):
-            # randomly pick which medicine to give (binary equal chance)
-            if np.random.binomial(1, 0.5):
-                med1.append(max(np.random.normal(DOSAGE, 1), 0))
-                health.append(np.random.normal(health[i-1] + 0.12 * med1[-1], 0.1))
-            else:
-                med2.append(max(np.random.normal(DOSAGE, 1), 0))
-                health.append(np.random.normal(health[i-1] - 0.1 * med2[-1], 0.1))
+            visit = []
+            med1 = max(np.random.normal(DOSAGE, 1), 0)
+            med2 = max(np.random.normal(DOSAGE, 1), 0)
+            visit.append(min(max(0, int(med1*2)-5), 9))
+            visit.append(min(max(10, int(med2*2)+5), 19))
+            
+            health.append(np.random.normal(health[i-1] + 0.12 * med1 - 0.1 * med2, 0.1))
 
-            #health.append(np.random.normal(health[i-1] + 0.12 * med1[i] - 0.1 * med2[i], 0.1))
+            patient.append(visit)
 
             # sigmoid on the latent health status
             mort = np.random.binomial(1, 1/(1+math.exp(health[i]/2+OFFSET+1)))
             if mort:
-                track_death_health.append(health[i])
-                track_death_timestamp.append(i)
-                health_track.append(health[i])
+                morts.append[1]
                 break
-            
+        
+        patients.append(patient)
         if not mort:
-            track_alive_health.append(health[TIME-1])
-            health_track.append(health[TIME-1])
+            morts.append[0]
 
-    #all_data = pd.DataFrame(data={'codes': code_placeholder.tolist(), 'numerics':data}, columns=['codes', 'numerics']).reset_index()
-    #all_targets = pd.DataFrame(data={'target': mort.tolist()},columns=['target']).reset_index()
+    all_data = pd.DataFrame(data={'codes': patients}, columns=['codes']).reset_index()
+    all_targets = pd.DataFrame(data={'target': morts},columns=['target']).reset_index()
 
-    #data_train,data_test = train_test_split(all_data, train_size=train_proportion, random_state=12345)
-    #target_train,target_test = train_test_split(all_targets, train_size=train_proportion, random_state=12345)
+    data_train,data_test = train_test_split(all_data, train_size=train_proportion, random_state=12345)
+    target_train,target_test = train_test_split(all_targets, train_size=train_proportion, random_state=12345)
 
-    #data_train.sort_index().to_pickle(out_directory+'/data_train.pkl')
-    #data_test.sort_index().to_pickle(out_directory+'/data_test.pkl')
-    #target_train.sort_index().to_pickle(out_directory+'/target_train.pkl')
-    #target_test.sort_index().to_pickle(out_directory+'/target_test.pkl')
+    data_train.sort_index().to_pickle(out_directory+'/data_train.pkl')
+    data_test.sort_index().to_pickle(out_directory+'/data_test.pkl')
+    target_train.sort_index().to_pickle(out_directory+'/target_train.pkl')
+    target_test.sort_index().to_pickle(out_directory+'/target_test.pkl')
