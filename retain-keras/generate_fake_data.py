@@ -22,6 +22,7 @@ if __name__ == '__main__':
 
     patients = []
     morts = []
+    types = {}
     # for every patient
     for n in range(N):
         health = []
@@ -35,8 +36,14 @@ if __name__ == '__main__':
             visit = []
             med1 = max(np.random.normal(DOSAGE, 1), 0)
             med2 = max(np.random.normal(DOSAGE, 1), 0)
-            visit.append(min(max(0, int(med1*4)-11), 17))
-            visit.append(min(max(18, int(med2*4)+7), 36))
+            code1 = min(max(0, int(med1*4)-11), 17)
+            code2 = min(max(18, int(med2*4)+7), 36)
+            visit.append(code1)
+            visit.append(code2)
+            if code1 not in types:
+                types[code1] = code1
+            if code2 not in types:
+                types[code2] = code2
             
             health.append(np.random.normal(health[i-1] + 0.12 * med1 - 0.1 * med2, 0.1))
 
@@ -62,3 +69,5 @@ if __name__ == '__main__':
     data_test.sort_index().to_pickle(out_directory+'/data_test.pkl')
     target_train.sort_index().to_pickle(out_directory+'/target_train.pkl')
     target_test.sort_index().to_pickle(out_directory+'/target_test.pkl')
+
+    pickle.dump(types, open(out_directory+'/dictionary.pkl', 'wb'), -1)
