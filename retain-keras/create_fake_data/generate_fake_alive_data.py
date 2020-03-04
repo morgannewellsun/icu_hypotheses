@@ -67,7 +67,7 @@ if __name__ == '__main__':
     data_train,data_test = train_test_split(all_data, train_size=train_proportion, random_state=12345)
     target_train,target_test = train_test_split(all_targets, train_size=train_proportion, random_state=12345)
 
-    data_test.sort_index().to_pickle(out_directory+'/data_test_death.pkl')
-    target_test.sort_index().to_pickle(out_directory+'/target_test_death.pkl')
+    data_test.sort_index().to_pickle(out_directory+'/data_test_alive.pkl')
+    target_test.sort_index().to_pickle(out_directory+'/target_test_alive.pkl')
 
     pickle.dump(types, open(out_directory+'/dictionary.pkl', 'wb'), -1)
