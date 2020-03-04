@@ -9,7 +9,7 @@ from sklearn.model_selection import train_test_split
 if __name__ == '__main__':
     out_directory = sys.argv[1]
     N_str = sys.argv[2]
-    train_proportion = 0
+    train_proportion = 0.1
 
     # data point t
     TIME = 30
