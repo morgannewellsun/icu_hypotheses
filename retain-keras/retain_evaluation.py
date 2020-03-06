@@ -116,8 +116,8 @@ def probability_calibration(y_true, y_prob,graph):
         plt.savefig('calibration.png')
 
         file1 = open("output.txt","w")
-        for entry in y_prob:
-            file1.write('%f\n'%entry)
+    for i in range(0, len(y_prob)):
+        file1.write('%f, %f\n'%(y_true[i], y_prob[i]))
 
 
 def lift(y_true, y_prob, graph):
