@@ -115,6 +115,11 @@ def probability_calibration(y_true, y_prob,graph):
         plt.tight_layout()
         plt.savefig('calibration.png')
 
+        file1 = open("output.txt","w")
+        for entry in y_prob:
+            file1.write('%f\n'%entry)
+
+
 def lift(y_true, y_prob, graph):
     """Print Precision Recall Statistics and Graph"""
     prevalence = sum(y_true)/len(y_true)
