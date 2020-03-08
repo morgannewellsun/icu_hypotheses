@@ -39,8 +39,18 @@ if __name__ == '__main__':
             med1.append(max(np.random.normal(DOSAGE, 1), 0))
             med2.append(max(np.random.normal(DOSAGE, 1), 0))
 
-            health.append(np.random.normal(health[i-1] + 0.12 * med1[-1] - 0.1 * med2[-1], 0.1))
+            admin = np.random.binomial(1, 0.5, (2,1))[:,0]
+            avgmed = (med1[-1] + med2[-1]) / 2
 
+            if admin[0] and admin[1]:
+                health.append(np.random.normal(health[i-1] + 0.15 * avgmed, 0.1))
+            elif admin[0]:
+                health.append(np.random.normal(health[i-1] + 0.1 * med1[-1], 0.1))
+            elif admin[1]:
+                health.append(np.random.normal(health[i-1] - 0.1 * med2[-1], 0.1))
+            else:
+                health.append(health[-1])
+            
             # sigmoid on the latent health status
             mort = np.random.binomial(1, 1/(1+math.exp(health[i]/2+OFFSET+1)))
             if mort:
