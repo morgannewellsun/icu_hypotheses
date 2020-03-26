@@ -42,7 +42,7 @@ if __name__ == '__main__':
             code2 = min(max(18, int(med2*4)+7), 36)
 
             if admin[0] and admin[1]:
-                health.append(np.random.normal(health[i-1] + 0.15 * avgmed, 0.1))
+                health.append(np.random.normal(health[i-1] + 0.3 * avgmed, 0.1))
                 visit.append(code1)
                 visit.append(code2)
             elif admin[0]:
