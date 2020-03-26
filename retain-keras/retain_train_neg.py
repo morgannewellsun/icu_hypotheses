@@ -35,7 +35,7 @@ class SequenceBuilder(Sequence):
         self.numeric_size = ARGS.numeric_size
         self.use_time = ARGS.use_time
         self.n_steps = ARGS.n_steps
-        self.balance = (1-(float(sum(target))/len(target)))/(float(sum(target))/len(target))
+        self.balance = 6
 
     def __len__(self):
         """Compute number of batches.
