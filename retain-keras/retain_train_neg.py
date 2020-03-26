@@ -280,8 +280,7 @@ def train_model(model, data_train, y_train, data_test, y_test, ARGS):
                                       batch_size=ARGS.batch_size, ARGS=ARGS)
     model.fit_generator(generator=train_generator, epochs=ARGS.epochs,
                         max_queue_size=15, use_multiprocessing=False,
-                        callbacks=[checkpoint, log], verbose=1, workers=ARGS.workers, initial_epoch=0,
-                        class_weight={0:1., 1:2.})
+                        callbacks=[checkpoint, log], verbose=1, workers=ARGS.workers, initial_epoch=0)
 
 def main(ARGS):
     """Main function"""
