@@ -35,7 +35,7 @@ class SequenceBuilder(Sequence):
         self.numeric_size = ARGS.numeric_size
         self.use_time = ARGS.use_time
         self.n_steps = ARGS.n_steps
-        #self.balance = (1-(float(sum(target))/len(target)))/(float(sum(target))/len(target))
+        self.balance = (1-(float(sum(target))/len(target)))/(float(sum(target))/len(target))
 
     def __len__(self):
         """Compute number of batches.
@@ -83,9 +83,9 @@ class SequenceBuilder(Sequence):
         #Add target if necessary (training vs validation)
         if self.target_out:
             target = self.target[batch_slice].reshape(length_batch, 1, 1)
-            #sample_weights = (target*(self.balance-1)+1).reshape(length_batch, 1)
+            sample_weights = (target*(self.balance-1)+1).reshape(length_batch, 1)
             #In our experiments sample weights provided worse results
-            return (outputs, target)
+            return (outputs, target, sample_weights)
 
         return outputs
 
