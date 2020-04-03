@@ -30,23 +30,22 @@ if __name__ == '__main__':
         patient = []
         # generate the latent stats from medication
         # one visit
-        for i in range(1, TIME):
+        for i in range(1, TIME*4):
             visit = []
-            admin = np.random.binomial(1, 0.5, (2,1))[:,0]
             med1 = max(np.random.normal(DOSAGE, 1), 0)
             med2 = max(np.random.normal(DOSAGE, 1), 0)
             avgmed = (med1 + med2) / 2
             code1 = min(max(0, int(med1*4)-11), 17)
             code2 = min(max(18, int(med2*4)+7), 36)
 
-            if admin[0] and admin[1]:
+            if i < TIME:
                 health.append(np.random.normal(health[i-1] + 0.3 * avgmed, 0.1))
                 visit.append(code1)
                 visit.append(code2)
-            elif admin[0]:
+            elif i < TIME*2:
                 health.append(np.random.normal(health[i-1] + 0.1 * med1, 0.1))
                 visit.append(code1)
-            elif admin[1]:
+            elif i < TIME*3:
                 health.append(np.random.normal(health[i-1] - 0.1 * med2, 0.1))
                 visit.append(code2)
             else:
@@ -69,15 +68,24 @@ if __name__ == '__main__':
         if not mort:
             morts.append(0)
 
-    all_data = pd.DataFrame(data={'codes': patients}, columns=['codes']).reset_index()
-    all_targets = pd.DataFrame(data={'target': morts},columns=['target']).reset_index()
+    interact_data = pd.DataFrame(data={'codes': patients[:TIME]}, columns=['codes']).reset_index()
+    interact_target = pd.DataFrame(data={'target': morts[:TIME]},columns=['target']).reset_index()
+    interact_data.sort_index().to_pickle(out_directory+'/interact_data.pkl')
+    interact_target.sort_index().to_pickle(out_directory+'/interact_target.pkl')
 
-    data_train,data_test = train_test_split(all_data, train_size=train_proportion, random_state=12345)
-    target_train,target_test = train_test_split(all_targets, train_size=train_proportion, random_state=12345)
+    med1_data = pd.DataFrame(data={'codes': patients[TIME:TIME*2]}, columns=['codes']).reset_index()
+    med1_target = pd.DataFrame(data={'target': morts[TIME:TIME*2]},columns=['target']).reset_index()
+    med1_data.sort_index().to_pickle(out_directory+'/med1_data.pkl')
+    med1_target.sort_index().to_pickle(out_directory+'/med1_target.pkl')
 
-    data_train.sort_index().to_pickle(out_directory+'/data_train.pkl')
-    data_test.sort_index().to_pickle(out_directory+'/data_test.pkl')
-    target_train.sort_index().to_pickle(out_directory+'/target_train.pkl')
-    target_test.sort_index().to_pickle(out_directory+'/target_test.pkl')
+    med2_data = pd.DataFrame(data={'codes': patients[TIME*2:TIME*3]}, columns=['codes']).reset_index()
+    med2_target = pd.DataFrame(data={'target': morts[TIME*2:TIME*3]},columns=['target']).reset_index()
+    med2_data.sort_index().to_pickle(out_directory+'/med2_data.pkl')
+    med2_target.sort_index().to_pickle(out_directory+'/med2_target.pkl')
+
+    control_data = pd.DataFrame(data={'codes': patients[TIME*3:]}, columns=['codes']).reset_index()
+    control_target = pd.DataFrame(data={'target': morts[TIME*3]},columns=['target']).reset_index()
+    control_data.sort_index().to_pickle(out_directory+'/control_data.pkl')
+    control_target.sort_index().to_pickle(out_directory+'/control_target.pkl')
 
     pickle.dump(types, open(out_directory+'/dictionary.pkl', 'wb'), -1)
