@@ -89,8 +89,7 @@ if __name__ == '__main__':
 
     interact_data = pd.DataFrame(data={'codes': patients}, columns=['codes']).reset_index()
     interact_target = pd.DataFrame(data={'target': morts},columns=['target']).reset_index()
-    print(interact_data.shape)
-    #interact_data.sort_index().to_pickle(out_directory+'/interact_data.pkl')
-    #interact_target.sort_index().to_pickle(out_directory+'/interact_target.pkl')
+    interact_data.sort_index().to_pickle(out_directory+'/interact_data.pkl')
+    interact_target.sort_index().to_pickle(out_directory+'/interact_target.pkl')
 
-    #pickle.dump(types, open(out_directory+'/dictionary.pkl', 'wb'), -1)
+    pickle.dump(types, open(out_directory+'/dictionary.pkl', 'wb'), -1)
