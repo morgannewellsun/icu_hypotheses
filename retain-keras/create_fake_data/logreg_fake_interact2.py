@@ -17,45 +17,59 @@ if __name__ == '__main__':
 
     code_placeholder=np.zeros((N, TIME, 4))
 
-    patients = np.zeros((N, TIME))
+    patients = np.zeros((N, TIME*2))
+
+    # see if med3 will accumulate
+    genetics = np.random.binomial(1, 0.5, (N,1))[:,0]
+
     morts = np.zeros(N)
     # for every patient
     for n in range(N):
-        health = []
+        health = [np.random.normal() - OFFSET]
+        heartrate = 0.
 
-        health.append(np.random.normal() - OFFSET) # come in with lower health status
-
-        patient = np.zeros(TIME*2)
+        patient = np.zeros(TIME*4)
         for i in range(1, TIME):
-            admin = np.random.binomial(1, 0.5, (2,1))[:,0]
+            admin = np.random.binomial(1, 0.5, (3,1))[:,0]
             med1 = max(np.random.normal(DOSAGE, 1), 0)
             med2 = max(np.random.normal(DOSAGE, 1), 0)
+            med3 = max(np.random.normal(DOSAGE, 1), 0)
             avgmed = (med1 + med2) / 2
 
+            health_delta = 0.
+
+            # interactive of both medications
             if admin[0] and admin[1]:
-                health.append(np.random.normal(health[i-1] + 0.3 * avgmed, 0.1))
-                patient[2*i] = med1
-                patient[2*i+1] = med2
+                health_delta += np.random.normal(0.3 * avgmed, 0.1)
+                patient[4*i] = med1
+                patient[4*i+1] = med2
             elif admin[0]:
-                health.append(np.random.normal(health[i-1] + 0.1 * med1, 0.1))
-                patient[2*i] = med1
-                patient[2*i+1] = 0.
+                health_delta += np.random.normal(0.1 * med1, 0.1)
+                patient[4*i] = med1
             elif admin[1]:
-                health.append(np.random.normal(health[i-1] - 0.1 * med2, 0.1))
-                patient[2*i] = 0.
-                patient[2*i+1] = med2
-            else:
-                health.append(health[-1])
-                patient[2*i] = 0.
-                patient[2*i+1] = 0.
+                health_delta += np.random.normal(-0.1 * med2, 0.1)
+                patient[4*i+1] = med2
+
+            # heart rate of medication 2 assigned genetically
+            if admin[2]:
+                patient[4*i+2] = med3
+                if genetics[n]:
+                    delta = -med3/50.
+                    heartrate += delta
+                    patient[4*i+3] = delta
+                    health_delta += np.random.normal(heartrate, 0.05)
+                else:
+                    health_delta += np.random.normal(0.1 * med3, 0.1)
+                
             
+            health.append(health[-1] + health_delta)
             # sigmoid on the latent health status
             mort = np.random.binomial(1, 1/(1+math.exp(health[i]/2+OFFSET+1)))
             if mort:
                 morts[n] = 1
                 break
         
-        patients[n, :] = patient[:TIME]
+        patients[n, :] = patient[:TIME*2]
         if not mort:
             morts[n] = 0
 
@@ -63,9 +77,6 @@ if __name__ == '__main__':
 
     data_train,data_test = train_test_split(patients, train_size=train_proportion, random_state=12345)
     target_train,target_test = train_test_split(morts, train_size=train_proportion, random_state=12345)
-
-    print(np.sum(target_test))
-    print(target_test.shape)
 
     logreg_model = LogisticRegression().fit(data_train, target_train)
     mean_accuracy = logreg_model.score(data_test, target_test)

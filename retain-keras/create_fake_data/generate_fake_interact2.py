@@ -1,64 +1,76 @@
-import pickle
 import numpy as np
-import pandas as pd
 import math
-import matplotlib.pyplot as plt
 import sys
 from sklearn.model_selection import train_test_split
+from sklearn.linear_model import LogisticRegression
 
 if __name__ == '__main__':
     out_directory = sys.argv[1]
-    N_str = sys.argv[2]
-    train_proportion = float(sys.argv[3])
+    N = int(sys.argv[1])
+    train_proportion = float(sys.argv[2])
 
     # data point t
     TIME = 30
     OFFSET = 4
     DOSAGE = 5
 
-    N = int(N_str)
+    code_placeholder=np.zeros((N, TIME, 4))
+
+    patients = np.zeros((N, TIME*2))
+
+    # see if med3 will accumulate
+    genetics = np.random.binomial(1, 0.5, (N,1))[:,0]
 
     patients = []
     morts = []
     types = {}
+
     # for every patient
     for n in range(N):
-        health = []
-
-        health.append(np.random.normal() - OFFSET) # come in with lower health status
+        health = [np.random.normal() - OFFSET]
+        heartrate = 0.
 
         patient = []
-        # generate the latent stats from medication
-        # one visit
         for i in range(1, TIME):
             visit = []
-            admin = np.random.binomial(1, 0.5, (2,1))[:,0]
+            admin = np.random.binomial(1, 0.5, (3,1))[:,0]
             med1 = max(np.random.normal(DOSAGE, 1), 0)
             med2 = max(np.random.normal(DOSAGE, 1), 0)
+            med3 = max(np.random.normal(DOSAGE, 1), 0)
             avgmed = (med1 + med2) / 2
             code1 = min(max(0, int(med1*4)-11), 17)
             code2 = min(max(18, int(med2*4)+7), 35)
+            code3 = min(max(36, int(med)))
 
+
+
+            health_delta = 0.
+
+            # interactive of both medications
             if admin[0] and admin[1]:
-                health.append(np.random.normal(health[i-1] + 0.3 * avgmed, 0.1))
-                visit.append(code1)
-                visit.append(code2)
+                health_delta += np.random.normal(0.3 * avgmed, 0.1)
+                patient[4*i] = med1
+                patient[4*i+1] = med2
             elif admin[0]:
-                health.append(np.random.normal(health[i-1] + 0.1 * med1, 0.1))
-                visit.append(code1)
+                health_delta += np.random.normal(0.1 * med1, 0.1)
+                patient[4*i] = med1
             elif admin[1]:
-                health.append(np.random.normal(health[i-1] - 0.1 * med2, 0.1))
-                visit.append(code2)
-            else:
-                health.append(health[-1])
-            
-            if code1 not in types:
-                types[code1] = code1
-            if code2 not in types:
-                types[code2] = code2
-            
-            patient.append(visit)
+                health_delta += np.random.normal(-0.1 * med2, 0.1)
+                patient[4*i+1] = med2
 
+            # heart rate of medication 2 assigned genetically
+            if admin[2]:
+                patient[4*i+2] = med3
+                if genetics[n]:
+                    delta = -med3/50.
+                    heartrate += delta
+                    patient[4*i+3] = delta
+                    health_delta += np.random.normal(heartrate, 0.05)
+                else:
+                    health_delta += np.random.normal(0.1 * med3, 0.1)
+                
+            
+            health.append(health[-1] + health_delta)
             # sigmoid on the latent health status
             mort = np.random.binomial(1, 1/(1+math.exp(health[i]/2+OFFSET+1)))
             if mort:
