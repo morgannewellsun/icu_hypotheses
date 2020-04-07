@@ -21,9 +21,7 @@ if __name__ == '__main__':
     types = {}
     # for every patient
     for n in range(N):
-        health = []
-
-        health.append(np.random.normal() - OFFSET) # come in with lower health status
+        health = [np.random.normal() - OFFSET] # come in with lower health status
         patient = []
         # generate the latent stats from medication
         # one visit
@@ -89,9 +87,9 @@ if __name__ == '__main__':
 
     print(np.sum(morts))
     print(np.array(morts).shape)
-    #interact_data = pd.DataFrame(data={'codes': patients}, columns=['codes']).reset_index()
-    #interact_target = pd.DataFrame(data={'target': morts},columns=['target']).reset_index()
-    #interact_data.sort_index().to_pickle(out_directory+'/interact_data.pkl')
-    #interact_target.sort_index().to_pickle(out_directory+'/interact_target.pkl')
+    interact_data = pd.DataFrame(data={'codes': patients}, columns=['codes']).reset_index()
+    interact_target = pd.DataFrame(data={'target': morts},columns=['target']).reset_index()
+    interact_data.sort_index().to_pickle(out_directory+'/interact_data.pkl')
+    interact_target.sort_index().to_pickle(out_directory+'/interact_target.pkl')
 
-    #pickle.dump(types, open(out_directory+'/dictionary.pkl', 'wb'), -1)
+    pickle.dump(types, open(out_directory+'/dictionary.pkl', 'wb'), -1)

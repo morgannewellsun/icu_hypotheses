@@ -6,8 +6,8 @@ from sklearn.linear_model import LogisticRegression
 
 if __name__ == '__main__':
     out_directory = sys.argv[1]
-    N = int(sys.argv[1])
-    train_proportion = float(sys.argv[2])
+    N = int(sys.argv[2])
+    train_proportion = float(sys.argv[3])
 
     # data point t
     TIME = 30
@@ -40,8 +40,7 @@ if __name__ == '__main__':
             avgmed = (med1 + med2) / 2
             code1 = min(max(0, int(med1*4)-11), 17)
             code2 = min(max(18, int(med2*4)+7), 35)
-            code3 = min(max(36, int(med)))
-
+            code3 = min(max(36, int(med3*4)+25), 53)
 
 
             health_delta = 0.
@@ -49,27 +48,28 @@ if __name__ == '__main__':
             # interactive of both medications
             if admin[0] and admin[1]:
                 health_delta += np.random.normal(0.3 * avgmed, 0.1)
-                patient[4*i] = med1
-                patient[4*i+1] = med2
+                visit.append(code1)
+                visit.append(code2)
             elif admin[0]:
                 health_delta += np.random.normal(0.1 * med1, 0.1)
-                patient[4*i] = med1
+                visit.append(code1)
             elif admin[1]:
                 health_delta += np.random.normal(-0.1 * med2, 0.1)
-                patient[4*i+1] = med2
+                visit.append(code2)
 
             # heart rate of medication 2 assigned genetically
             if admin[2]:
-                patient[4*i+2] = med3
+                visit.append(code3)
                 if genetics[n]:
                     delta = -med3/50.
                     heartrate += delta
-                    patient[4*i+3] = delta
-                    health_delta += np.random.normal(heartrate, 0.05)
+                    health_delta += np.random.normal(heartrate, 0.025)
+                    visit.append(max(min(55, 54+int(-delta * 40)), 62))
                 else:
                     health_delta += np.random.normal(0.1 * med3, 0.1)
+                    visit.append(54)
                 
-            
+            patient.append(visit)
             health.append(health[-1] + health_delta)
             # sigmoid on the latent health status
             mort = np.random.binomial(1, 1/(1+math.exp(health[i]/2+OFFSET+1)))

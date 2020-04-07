@@ -57,7 +57,7 @@ if __name__ == '__main__':
                     delta = -med3/50.
                     heartrate += delta
                     patient[4*i+3] = delta
-                    health_delta += np.random.normal(heartrate, 0.05)
+                    health_delta += np.random.normal(heartrate, 0.025)
                 else:
                     health_delta += np.random.normal(0.1 * med3, 0.1)
                 
