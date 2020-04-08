@@ -81,11 +81,11 @@ if __name__ == '__main__':
     logreg_train_label, logreg_test_label = train_test_split(morts, train_size=train_proportion, random_state=12345)
     print('Record the following information:')
     print('%d expired out of %d'%(np.sum(morts), N))
-    print('%d expired out of %d (test set)'%(np.sum(logreg_test_label), N))
+    print('%d expired out of %d (test set)'%(np.sum(logreg_test_label), np.shape(logreg_test_label)[0]))
     logreg_model = LogisticRegression().fit(logreg_train, logreg_train_label)
     mean_accuracy = logreg_model.score(logreg_test, logreg_test_label)
     print('Mean accuracy: %f' % mean_accuracy)
-
+'''
     # for RNN
     all_data = pd.DataFrame(data={'codes': patients}, columns=['codes']).reset_index()
     all_targets = pd.DataFrame(data={'target': morts},columns=['target']).reset_index()
@@ -98,4 +98,4 @@ if __name__ == '__main__':
     target_train.sort_index().to_pickle(out_directory+'/target_train.pkl')
     target_test.sort_index().to_pickle(out_directory+'/target_test.pkl')
 
-    pickle.dump(types, open(out_directory+'/dictionary.pkl', 'wb'), -1)
+    pickle.dump(types, open(out_directory+'/dictionary.pkl', 'wb'), -1)'''
