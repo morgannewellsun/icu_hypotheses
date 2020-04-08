@@ -44,7 +44,7 @@ if __name__ == '__main__':
                 visit.append(code1)
                 visit.append(code2)
                 logreg_patient[2*i] = med1
-                patient[2*i+1] = med2
+                logreg_patient[2*i+1] = med2
             elif admin[0]:
                 health.append(np.random.normal(health[i-1] + 0.1 * med1, 0.1))
                 visit.append(code1)
@@ -88,7 +88,7 @@ if __name__ == '__main__':
     # for RNN
     all_data = pd.DataFrame(data={'codes': patients}, columns=['codes']).reset_index()
     all_targets = pd.DataFrame(data={'target': morts},columns=['target']).reset_index()
-    
+
     data_train,data_test = train_test_split(all_data, train_size=train_proportion, random_state=12345)
     target_train,target_test = train_test_split(all_targets, train_size=train_proportion, random_state=12345)
 
