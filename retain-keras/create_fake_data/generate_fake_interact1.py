@@ -5,6 +5,7 @@ import math
 import matplotlib.pyplot as plt
 import sys
 from sklearn.model_selection import train_test_split
+from sklearn.linear_model import LogisticRegression
 
 if __name__ == '__main__':
     out_directory = sys.argv[1]
