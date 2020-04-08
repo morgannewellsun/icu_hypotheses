@@ -8,7 +8,7 @@ from sklearn.model_selection import train_test_split
 
 if __name__ == '__main__':
     out_directory = sys.argv[1]
-    N_str = sys.argv[2]
+    N = int(sys.argv[2])
     train_proportion = float(sys.argv[3])
 
     # data point t
@@ -16,10 +16,9 @@ if __name__ == '__main__':
     OFFSET = 4
     DOSAGE = 5
 
-    N = int(N_str)
-
     patients = []
     morts = []
+    logreg_patients = np.zeros((N, TIME))
     types = {}
     # for every patient
     for n in range(N):
@@ -28,6 +27,7 @@ if __name__ == '__main__':
         health.append(np.random.normal() - OFFSET) # come in with lower health status
 
         patient = []
+        logreg_patient = np.zeros(TIME*2)
         # generate the latent stats from medication
         # one visit
         for i in range(1, TIME):
@@ -43,12 +43,16 @@ if __name__ == '__main__':
                 health.append(np.random.normal(health[i-1] + 0.3 * avgmed, 0.1))
                 visit.append(code1)
                 visit.append(code2)
+                logreg_patient[2*i] = med1
+                patient[2*i+1] = med2
             elif admin[0]:
                 health.append(np.random.normal(health[i-1] + 0.1 * med1, 0.1))
                 visit.append(code1)
+                logreg_patient[2*i] = med1
             elif admin[1]:
                 health.append(np.random.normal(health[i-1] - 0.1 * med2, 0.1))
                 visit.append(code2)
+                logreg_patient[2*i] = 0.
             else:
                 health.append(health[-1])
             
@@ -66,12 +70,25 @@ if __name__ == '__main__':
                 break
         
         patients.append(patient)
+        logreg_patients[n, :] = logreg_patient[:TIME]
         if not mort:
             morts.append(0)
 
+    
+    # for logistic regression
+    logreg_train, logreg_test = train_test_split(logreg_patients, train_size=train_proportion, random_state=12345)
+    logreg_train_label, logreg_test_label = train_test_split(morts, train_size=train_proportion, random_state=12345)
+    print('Record the following information:')
+    print('%d expired out of %d'%(np.sum(morts), N))
+    print('%d expired out of %d (test set)'%(np.sum(logreg_test_label), N))
+    logreg_model = LogisticRegression().fit(logreg_train, logreg_train_label)
+    mean_accuracy = logreg_model.score(logreg_test, logreg_test_label)
+    print('Mean accuracy: %f' % mean_accuracy)
+
+    # for RNN
     all_data = pd.DataFrame(data={'codes': patients}, columns=['codes']).reset_index()
     all_targets = pd.DataFrame(data={'target': morts},columns=['target']).reset_index()
-
+    
     data_train,data_test = train_test_split(all_data, train_size=train_proportion, random_state=12345)
     target_train,target_test = train_test_split(all_targets, train_size=train_proportion, random_state=12345)
 
