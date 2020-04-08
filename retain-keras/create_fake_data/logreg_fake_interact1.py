@@ -15,9 +15,7 @@ if __name__ == '__main__':
 
     N = int(N_str)
 
-    code_placeholder=np.zeros((N, TIME, 4))
-
-    patients = np.zeros((N, TIME))
+    patients = np.zeros((N, TIME*2))
     morts = np.zeros(N)
     # for every patient
     for n in range(N):
@@ -55,7 +53,7 @@ if __name__ == '__main__':
                 morts[n] = 1
                 break
         
-        patients[n, :] = patient[:TIME]
+        patients[n, :] = patient
         if not mort:
             morts[n] = 0
 

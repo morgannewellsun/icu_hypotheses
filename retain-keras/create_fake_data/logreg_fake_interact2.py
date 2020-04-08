@@ -15,8 +15,6 @@ if __name__ == '__main__':
 
     N = int(N_str)
 
-    code_placeholder=np.zeros((N, TIME, 4))
-
     patients = np.zeros((N, TIME*2))
 
     # see if med3 will accumulate

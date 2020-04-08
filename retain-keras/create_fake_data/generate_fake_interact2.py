@@ -5,6 +5,7 @@ import math
 import matplotlib.pyplot as plt
 import sys
 from sklearn.model_selection import train_test_split
+from sklearn.linear_model import LogisticRegression
 
 if __name__ == '__main__':
     out_directory = sys.argv[1]
@@ -16,13 +17,12 @@ if __name__ == '__main__':
     OFFSET = 4
     DOSAGE = 5
 
-    code_placeholder=np.zeros((N, TIME, 4))
-
     patients = np.zeros((N, TIME*2))
 
     # see if med3 will accumulate
     genetics = np.random.binomial(1, 0.5, (N,1))[:,0]
 
+    logreg_patients = np.zeros((N, TIME*2))
     patients = []
     morts = []
     types = {}
@@ -32,6 +32,7 @@ if __name__ == '__main__':
         health = [np.random.normal() - OFFSET]
         heartrate = 0.
 
+        logreg_patient = np.zeros(TIME*4)
         patient = []
         for i in range(1, TIME):
             visit = []
@@ -52,19 +53,25 @@ if __name__ == '__main__':
                 health_delta += np.random.normal(0.3 * avgmed, 0.1)
                 visit.append(code1)
                 visit.append(code2)
+                logreg_patient[4*i] = med1
+                logreg_patient[4*i+1] = med2
             elif admin[0]:
                 health_delta += np.random.normal(0.1 * med1, 0.1)
                 visit.append(code1)
+                logreg_patient[4*i] = med1
             elif admin[1]:
                 health_delta += np.random.normal(-0.1 * med2, 0.1)
                 visit.append(code2)
+                logreg_patient[4*i+1] = med2
 
             # heart rate of medication 2 assigned genetically
             if admin[2]:
                 visit.append(code3)
+                logreg_patient[4*i+2] = med3
                 if genetics[n]:
                     delta = -med3/50.
                     heartrate += delta
+                    logreg_patient[4*i+3] = delta
                     health_delta += np.random.normal(heartrate, 0.025)
                     visit.append(max(min(55, 54+int(-delta * 40)), 62))
                 else:
@@ -80,9 +87,22 @@ if __name__ == '__main__':
                 break
         
         patients.append(patient)
+        logreg_patients[n, :] = logreg_patient[:TIME*2]
         if not mort:
             morts.append(0)
 
+
+    # for logistic regression
+    logreg_train, logreg_test = train_test_split(logreg_patients, train_size=train_proportion, random_state=12345)
+    logreg_train_label, logreg_test_label = train_test_split(morts, train_size=train_proportion, random_state=12345)
+    print('Record the following information:')
+    print('%d expired out of %d'%(np.sum(morts), N))
+    print('%d expired out of %d (test set)'%(np.sum(logreg_test_label), np.shape(logreg_test_label)[0]))
+    logreg_model = LogisticRegression().fit(logreg_train, logreg_train_label)
+    mean_accuracy = logreg_model.score(logreg_test, logreg_test_label)
+    print('Mean accuracy: %f' % mean_accuracy)
+
+    # for RNN
     all_data = pd.DataFrame(data={'codes': patients}, columns=['codes']).reset_index()
     all_targets = pd.DataFrame(data={'target': morts},columns=['target']).reset_index()
 
