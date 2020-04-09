@@ -65,7 +65,7 @@ if __name__ == '__main__':
     print('Expired in dataset using %d out of %d: %d' % (interact_flag, N, ori_dead))
 
     # clone them for control (doing nothing)
-    for n in range(N):
+    '''for n in range(N):
         health2 = []
 
         health2.append(health[0])
@@ -89,7 +89,7 @@ if __name__ == '__main__':
             morts.append(0)
 
     dup_dead = np.sum(morts)-ori_dead
-    print('Expired in duplicate: %d' % dup_dead)
+    print('Expired in duplicate: %d' % dup_dead)'''
     
     interact_data = pd.DataFrame(data={'codes': patients}, columns=['codes']).reset_index()
     interact_target = pd.DataFrame(data={'target': morts},columns=['target']).reset_index()
