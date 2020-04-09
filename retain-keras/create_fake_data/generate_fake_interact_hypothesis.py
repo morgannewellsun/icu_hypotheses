@@ -88,8 +88,8 @@ if __name__ == '__main__':
         if not mort:
             morts.append(0)
 
-
-    print('Expired in duplicate: %d' % np.sum(morts)-ori_dead)
+    dup_dead = np.sum(morts)-ori_dead
+    print('Expired in duplicate: %d' % dup_dead)
     
     interact_data = pd.DataFrame(data={'codes': patients}, columns=['codes']).reset_index()
     interact_target = pd.DataFrame(data={'target': morts},columns=['target']).reset_index()
