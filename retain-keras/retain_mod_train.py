@@ -290,8 +290,6 @@ def main(ARGS):
     print('Reading Data')
     data_train, y_train, data_test, y_test = read_data(ARGS)
 
-    pdb.set_trace()
-
     print('Creating Model')
     model = model_create(ARGS)
 
