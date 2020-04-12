@@ -15,6 +15,9 @@ from keras.constraints import non_neg, Constraint
 from sklearn.metrics import roc_auc_score, average_precision_score, precision_recall_curve
 
 
+import pdb
+
+
 class SequenceBuilder(Sequence):
     """Generate Batches of data"""
     def __init__(self, data, target, batch_size, ARGS, target_out=True):
@@ -156,6 +159,7 @@ def model_create(ARGS):
         codes_embs = L.Lambda(lambda x: K.sum(x, axis=2))(codes_embs_total)
         #Numeric input if needed
         if ARGS.numeric_size:
+
             numerics = L.Input((None, ARGS.numeric_size), name='numeric_input')
             inputs_list.append(numerics)
             full_embs = L.concatenate([codes_embs, numerics], name='catInp')
@@ -177,12 +181,10 @@ def model_create(ARGS):
         #This implementation uses Bidirectional LSTM instead of reverse order
         #    (see https://github.com/mp2893/retain/issues/3 for more details)
 
-        alpha = L.Bidirectional(L.LSTM(ARGS.recurrent_size,
-                                        return_sequences=True, implementation=2),
-                                name='alpha')
-        beta = L.Bidirectional(L.LSTM(ARGS.recurrent_size,
-                                      return_sequences=True, implementation=2),
-                               name='beta')
+        alpha = L.LSTM(ARGS.recurrent_size,
+                                        return_sequences=True, implementation=2)
+        beta = L.LSTM(ARGS.recurrent_size,
+                                      return_sequences=True, implementation=2)
 
         alpha_dense = L.Dense(1, kernel_regularizer=l2(ARGS.l2))
         beta_dense = L.Dense(ARGS.emb_size+ARGS.numeric_size,
@@ -203,7 +205,8 @@ def model_create(ARGS):
 
         #Make a prediction
         contexts = L.Dropout(ARGS.dropout_context)(contexts)
-        output_layer = L.Dense(1, activation='sigmoid', name='dOut',
+
+        output_layer = L.Dense(1 + ARGS.num_codes, activation='sigmoid', name='dOut',
                                kernel_regularizer=l2(ARGS.l2), kernel_constraint=output_constraint)
 
         #TimeDistributed is used for consistency
@@ -286,6 +289,8 @@ def main(ARGS):
     """Main function"""
     print('Reading Data')
     data_train, y_train, data_test, y_test = read_data(ARGS)
+
+    pdb.set_trace()
 
     print('Creating Model')
     model = model_create(ARGS)
