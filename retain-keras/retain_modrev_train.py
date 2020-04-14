@@ -188,7 +188,8 @@ def model_create(ARGS):
         beta_dense = L.Dense(ARGS.emb_size+ARGS.numeric_size,
                              activation=beta_activation, kernel_regularizer=l2(ARGS.l2))
 
-        rev_embs = time_embs[::-1] # reverse attention
+
+        rev_embs = L.Lambda(lambda x: K.reverse(x,axes=0))(time_embs)
         #Compute alpha, visit attention
         alpha_out = alpha(rev_embs)
         alpha_out = L.TimeDistributed(alpha_dense, name='alpha_dense_0')(alpha_out)
