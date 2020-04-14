@@ -188,14 +188,13 @@ def model_create(ARGS):
         beta_dense = L.Dense(ARGS.emb_size+ARGS.numeric_size,
                              activation=beta_activation, kernel_regularizer=l2(ARGS.l2))
 
-        pdb.set_trace()
-        #time_embs = time_embs[::-1] # reverse attention
+        rev_embs = time_embs[::-1] # reverse attention
         #Compute alpha, visit attention
-        alpha_out = alpha(time_embs)
+        alpha_out = alpha(rev_embs)
         alpha_out = L.TimeDistributed(alpha_dense, name='alpha_dense_0')(alpha_out)
         alpha_out = L.Softmax(axis=1)(alpha_out)
         #Compute beta, codes attention
-        beta_out = beta(time_embs)
+        beta_out = beta(rev_embs)
         beta_out = L.TimeDistributed(beta_dense, name='beta_dense_0')(beta_out)
         #Compute context vector based on attentions and embeddings
         c_t = L.Multiply()([alpha_out, beta_out, full_embs])
