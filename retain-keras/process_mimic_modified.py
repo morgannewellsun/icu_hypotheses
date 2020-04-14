@@ -213,4 +213,7 @@ if __name__ == '__main__':
     pickle.dump(types_3digit, open(out_directory+'/dictionary_3digit.pkl', 'wb'), -1)
 
     print(len(types_3digit))
+    print(len(types))
+    print(max(types_3digit))
+    print(max(types))
     print(len(new_seqs_3digit))

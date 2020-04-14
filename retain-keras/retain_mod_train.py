@@ -15,9 +15,6 @@ from keras.constraints import non_neg, Constraint
 from sklearn.metrics import roc_auc_score, average_precision_score, precision_recall_curve
 
 
-import pdb
-
-
 class SequenceBuilder(Sequence):
     """Generate Batches of data"""
     def __init__(self, data, target, batch_size, ARGS, target_out=True):
@@ -159,7 +156,6 @@ def model_create(ARGS):
         codes_embs = L.Lambda(lambda x: K.sum(x, axis=2))(codes_embs_total)
         #Numeric input if needed
         if ARGS.numeric_size:
-
             numerics = L.Input((None, ARGS.numeric_size), name='numeric_input')
             inputs_list.append(numerics)
             full_embs = L.concatenate([codes_embs, numerics], name='catInp')
@@ -205,8 +201,7 @@ def model_create(ARGS):
 
         #Make a prediction
         contexts = L.Dropout(ARGS.dropout_context)(contexts)
-
-        output_layer = L.Dense(1 + ARGS.num_codes, activation='sigmoid', name='dOut',
+        output_layer = L.Dense(1, activation='sigmoid', name='dOut',
                                kernel_regularizer=l2(ARGS.l2), kernel_constraint=output_constraint)
 
         #TimeDistributed is used for consistency
