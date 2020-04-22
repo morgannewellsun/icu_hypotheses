@@ -43,13 +43,13 @@ if __name__ == '__main__':
             avgmed = (med1 + med2) / 2
 
             '''
-            The code system works as follows: discretize each med into 0.25 increments from 5.
-            Lowest "bin" is -INF to 3, and highest bin is up to INF. 
+            The code system works as follows: discretize the same way as the method in 1 and 2
+            But this time, each 6 bins previously make up 1 bin
+            Meaning, -INF to 4.25, 4.25-5.75, 5.75-INF
             '''
-
-            code1 = min(max(0, int(med1*4)-11), 17)
-            code2 = min(max(18, int(med2*4)+7), 35)
-            code3 = min(max(36, int(med3*4)+25), 53)
+            code1 = min(max(0, int((med1*4)-11)/6), 2) # 0-2
+            code2 = min(max(3, int((med2*4)+7)/6), 5) # 3-5
+            code3 = min(max(6, int((med3*4)+25)/6), 8) # 6-8
 
 
             health_delta = 0.
@@ -75,14 +75,14 @@ if __name__ == '__main__':
                 visit.append(code3)
                 logreg_patient[4*i+2] = med3
                 if genetics[n]:
-                    delta = -med3/50.
+                    delta = -med3/50. # change is med3/50
                     heartrate += delta
                     logreg_patient[4*i+3] = delta
                     health_delta += np.random.normal(heartrate, 0.025)
-                    visit.append(min(max(55, 54+int(-delta * 40)), 62))
+                    visit.append(min(max(10, 10+int(-delta * 10)), 11))
                 else:
                     health_delta += np.random.normal(0.1 * med3, 0.1)
-                    visit.append(54)
+                    visit.append(9) # no heart change
                 
             patient.append(visit)
             health.append(health[-1] + health_delta)
