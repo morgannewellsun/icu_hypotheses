@@ -52,23 +52,70 @@ for i, sentence in enumerate(sentences):
 def read_data(ARGS):
     """Read the data from provided paths and assign it into lists"""
     data_train_df = pd.read_pickle(ARGS.path_data_train)
-    data_test_df = pd.read_pickle(ARGS.path_data_test)
     y_train = pd.read_pickle(ARGS.path_target_train)['target'].values
-    y_test = pd.read_pickle(ARGS.path_target_test)['target'].values
     data_output_train = [data_train_df['codes'].values]
-    data_output_test = [data_test_df['codes'].values]
 
-    return (data_output_train, y_train, data_output_test, y_test)
+    return (data_output_train, y_train)
+
+def codify(data_train, y_train, num_codes, maxlen = 3):
+    # preprocess
+    processed_patients = []
+    sample_size = 0
+    for i, patient in enumerate(data_train):
+        if len(patient) < maxlen:
+            continue
+        sample_size += len(patient) - maxlen
+        processed_patient = []
+        for visit in patient:
+            if len(visit) == 0:
+                processed_patient.append(82) # nothing happened
+
+            single_code = 0
+            for code in visit:
+                if code < 3:
+                    single_code += code
+                elif code < 6:
+                    single_code += 3 * code
+                elif code < 9:
+                    single_code += 9 * code
+                elif code == 10:
+                    single_code += 27
+                elif code == 11:
+                    single_code += 27 * 2
+            processed_patient.append(single_code)
+        # put in 1 more code for how it ended
+        if y_train[i] == 1:
+            processed_patient.append(83)
+        else:
+            processed_patient.append(84)
+        processed_patients.append(processed_patient)
+
+    # process and output
+    x = np.zeros((sample_size, maxlen))
+    y = np.zeros((sample_size, num_codes))
+    for patient in processed_patients:
+        for i in range(len(patient)-maxlen):
+            x[i,:] = patient[i:i+maxlen]
+            y[i, patient[i+maxlen]] = 1
+    return x, y
 
 
 def main(ARGS):
+
+    maxlen = ARGS.maxlen
+    embed_size = ARGS.emb_size
+    num_codes = ARGS.num_codes
+
     print('Reading Data...')
-    read_data(ARGS)
+    data_train, y_train = read_data(ARGS)
+
+    print('Codifying Data...')
+    x, y = codify(data_train, y_train, num_codes, maxlen)
 
     print('Creating Model...')
     input_layer = layers.Input((maxlen,), name='time_input')
     #print(input_layer)
-    embedding = layers.Embedding(input_dim=len(chars), output_dim=embed_size)(input_layer)
+    embedding = layers.Embedding(input_dim=num_codes, output_dim=embed_size)(input_layer)
     #print(embedding)
     activations = layers.LSTM(128, input_shape=(maxlen, embed_size), return_sequences=True)(embedding)
 
@@ -82,7 +129,7 @@ def main(ARGS):
     sent_representation = layers.Multiply()([attention, embedding])
 
     attention_activations = layers.LSTM(128, input_shape=(maxlen, embed_size))(sent_representation)
-    predictions = layers.Dense(len(chars), activation='softmax')(attention_activations)
+    predictions = layers.Dense(num_codes, activation='softmax')(attention_activations)
 
     model = Model(input=input_layer, output=predictions)
     optimizer = RMSprop(lr=0.01)
@@ -141,16 +188,14 @@ def parse_arguments(parser):
                         help='Number of medical codes')
     parser.add_argument('--emb_size', type=int, default=10,
                         help='Size of the embedding layer')
+    parser.add_argument('--maxlen', type=int, default=3,
+                        help='Size of the embedding layer')
     parser.add_argument('--epochs', type=int, default=1,
                         help='Number of epochs')
     parser.add_argument('--path_data_train', type=str, default='data/data_train.pkl',
                         help='Path to train data')
-    parser.add_argument('--path_data_test', type=str, default='data/data_test.pkl',
-                        help='Path to test data')
     parser.add_argument('--path_target_train', type=str, default='data/target_train.pkl',
                         help='Path to train target')
-    parser.add_argument('--path_target_test', type=str, default='data/target_test.pkl',
-                        help='Path to test target')
     args = parser.parse_args()
 
     return args
