@@ -68,7 +68,7 @@ def codify(data_train, y_train, num_codes, maxlen = 3):
         processed_patient = []
         for visit in patient:
             if len(visit) == 0:
-                processed_patient.append(82) # nothing happened
+                processed_patient.append(81) # nothing happened
 
             single_code = 0
             for code in visit:
@@ -85,9 +85,9 @@ def codify(data_train, y_train, num_codes, maxlen = 3):
             processed_patient.append(single_code)
         # put in 1 more code for how it ended
         if y_train[i] == 1:
-            processed_patient.append(83)
+            processed_patient.append(82)
         else:
-            processed_patient.append(84)
+            processed_patient.append(83)
         processed_patients.append(processed_patient)
 
     # process and output
