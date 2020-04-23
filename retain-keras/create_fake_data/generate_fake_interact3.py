@@ -47,9 +47,9 @@ if __name__ == '__main__':
             But this time, each 6 bins previously make up 1 bin
             Meaning, -INF to 4.25, 4.25-5.75, 5.75-INF
             '''
-            code1 = min(max(0, int((med1*4)-11)/6), 2) # 0-2
-            code2 = min(max(3, int((med2*4)+7)/6), 5) # 3-5
-            code3 = min(max(6, int((med3*4)+25)/6), 8) # 6-8
+            code1 = min(max(0, int(((med1*4)-11)/6)), 2) # 0-2
+            code2 = min(max(3, int(((med2*4)+7)/6)), 5) # 3-5
+            code3 = min(max(6, int(((med3*4)+25)/6)), 8) # 6-8
 
 
             health_delta = 0.
@@ -96,6 +96,8 @@ if __name__ == '__main__':
         logreg_patients[n, :] = logreg_patient[:TIME*2]
         if not mort:
             morts.append(0)
+
+    print(patients)
 
 
     # for logistic regression

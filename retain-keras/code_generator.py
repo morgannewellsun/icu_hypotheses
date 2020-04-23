@@ -61,6 +61,7 @@ def codify(data_train, y_train, num_codes, maxlen = 3):
     # preprocess
     processed_patients = []
     sample_size = 0
+    print(data_train)
     for i, patient in enumerate(data_train):
         if len(patient) < maxlen:
             continue
@@ -72,6 +73,7 @@ def codify(data_train, y_train, num_codes, maxlen = 3):
 
             single_code = 0
             for code in visit:
+                print(code)
                 if code < 3:
                     single_code += code
                 elif code < 6:
