@@ -6,100 +6,112 @@ import pandas as pd
 from keras.models import Model
 from keras import layers
 from keras.optimizers import RMSprop
-
-'''path = keras.utils.get_file(
-    'nietzsche.txt',
-    origin='https://s3.amazonaws.com/text-datasets/nietzsche.txt')
-text = open(path).read().lower()
-print('Corpus length:', len(text))
-
-# Length of extracted character sequences
-maxlen = 60
-embed_size = 100
-
-# We sample a new sequence every `step` characters
-step = 3
-
-# This holds our extracted sequences
-sentences = []
-
-# This holds the targets (the follow-up characters)
-next_chars = []
-
-for i in range(0, len(text) - maxlen, step):
-    sentences.append(text[i: i + maxlen])
-    next_chars.append(text[i + maxlen])
-print('Number of sequences:', len(sentences))
-
-# List of unique characters in the corpus
-chars = sorted(list(set(text)))
-print('Unique characters:', len(chars))
-# Dictionary mapping unique characters to their index in `chars`
-char_indices = dict((char, chars.index(char)) for char in chars)
-
-# Next, one-hot encode the characters into binary arrays.
-print('Vectorization...')
-
-
-x = np.zeros((len(sentences), maxlen))
-y = np.zeros((len(sentences), len(chars)))
-for i, sentence in enumerate(sentences):
-    for t, char in enumerate(sentence):
-        x[i, t] = char_indices[char]
-    y[i, char_indices[next_chars[i]]] = 1'''
-
+from keras.callbacks import ModelCheckpoint
 
 def read_data(ARGS):
     """Read the data from provided paths and assign it into lists"""
-    data_train_df = pd.read_pickle(ARGS.path_data_train)
+    x_train = pd.read_pickle(ARGS.path_data_train)['codes'].values
     y_train = pd.read_pickle(ARGS.path_target_train)['target'].values
-    data_output_train = [data_train_df['codes'].values]
 
-    return (data_output_train, y_train)
+    return (x_train, y_train)
 
 def codify(data_train, y_train, num_codes, maxlen = 3):
     # preprocess
     processed_patients = []
     sample_size = 0
-    print(data_train)
     for i, patient in enumerate(data_train):
         if len(patient) < maxlen:
             continue
-        sample_size += len(patient) - maxlen
         processed_patient = []
         for visit in patient:
             if len(visit) == 0:
-                processed_patient.append(81) # nothing happened
+                processed_patient.append(192) # nothing happened
 
             single_code = 0
+            base = np.zeros(3) # this is in base 4
+
             for code in visit:
-                print(code)
                 if code < 3:
-                    single_code += code
+                    base[0] = code+1
                 elif code < 6:
-                    single_code += 3 * code
+                    base[1] = code-3+1
                 elif code < 9:
-                    single_code += 9 * code
-                elif code == 10:
-                    single_code += 27
+                    base[2] = code-6+1
+                else:
+                    single_code = base[0] + base[1] * 4 + base[2] * 16
+               
+                if code == 10:
+                    single_code += 64
                 elif code == 11:
-                    single_code += 27 * 2
+                    single_code += 64 * 2
+
             processed_patient.append(single_code)
         # put in 1 more code for how it ended
         if y_train[i] == 1:
-            processed_patient.append(82)
+            processed_patient.append(193)
         else:
-            processed_patient.append(83)
+            processed_patient.append(194)
+
+        sample_size += len(processed_patient) - maxlen + 1
+
         processed_patients.append(processed_patient)
 
     # process and output
     x = np.zeros((sample_size, maxlen))
     y = np.zeros((sample_size, num_codes))
+    count = 0
     for patient in processed_patients:
         for i in range(len(patient)-maxlen):
-            x[i,:] = patient[i:i+maxlen]
-            y[i, patient[i+maxlen]] = 1
+            x[count,:] = patient[i:i+maxlen]
+            y[count, int(patient[i+maxlen])] = 1
+            count += 1
+
+    print('Found %d sequences of length %d among %d patients' % (sample_size, maxlen, len(processed_patients)))
     return x, y
+
+def process(data_train, y_train, num_codes, maxlen, simple):
+    
+    num_sequences = 0
+    all_sequences = []
+    for i, patient in enumerate(data_train):
+
+        # get the code sequence into an interable list
+        patient_sequence = []
+        for visit in patient:
+            for code in visit:
+                patient_sequence.append(code)
+
+        if y_train[i] == 1:
+            if simple:
+                patient_sequence.append(12) # expired
+            else:
+                patient_sequence.append(63)
+        else:
+            if simple:
+                patient_sequence.append(13)
+            else:
+                patient_sequence.append(64) # released
+
+        # skip if patient cannot supply maximum length
+        if len(patient_sequence) < maxlen:
+            continue
+
+        num_sequences += len(patient_sequence) - maxlen + 1
+
+        all_sequences.append(patient_sequence)
+
+    x = np.zeros((num_sequences, maxlen))
+    y = np.zeros((num_sequences, num_codes))
+    count = 0
+    for patient in all_sequences:
+        for i in range(len(patient)-maxlen):
+            x[count,:] = patient[i:i+maxlen]
+            y[count, int(patient[i+maxlen])] = 1
+            count += 1
+
+    print('Found %d sequences of length %d among %d patients' % (num_sequences, maxlen, len(all_sequences)))
+    return x, y
+
 
 
 def main(ARGS):
@@ -107,12 +119,18 @@ def main(ARGS):
     maxlen = ARGS.maxlen
     embed_size = ARGS.emb_size
     num_codes = ARGS.num_codes
+    epochs = ARGS.epochs
+    batch_size = ARGS.batch_size
 
     print('Reading Data...')
     data_train, y_train = read_data(ARGS)
 
-    print('Codifying Data...')
-    x, y = codify(data_train, y_train, num_codes, maxlen)
+    if ARGS.codify:
+        print('Codifying Data...')
+        x, y = codify(data_train, y_train, num_codes, maxlen)
+    else:
+        print('Processing Data...')
+        x, y = process(data_train, y_train, num_codes, maxlen, ARGS.simple)
 
     print('Creating Model...')
     input_layer = layers.Input((maxlen,), name='time_input')
@@ -147,57 +165,74 @@ def main(ARGS):
         probas = np.random.multinomial(1, preds, 1)
         return np.argmax(probas)
 
-    import random
-    import sys
-
     print('Training Model...')
-    for epoch in range(1, 60):
-        print('epoch', epoch)
-        # Fit the model for 1 epoch on the available training data
-        model.fit(x, y,
-                  batch_size=128,
-                  epochs=1)
 
-        # Select a text seed at random
-        start_index = random.randint(0, len(text) - maxlen - 1)
-        generated_text = text[start_index: start_index + maxlen]
-        print('--- Generating with seed: "' + generated_text + '"')
+    temperature = 1.0 # hyperparam
 
-        for temperature in [0.2, 0.5, 1.0, 1.2]:
-            print('------ temperature:', temperature)
-            sys.stdout.write(generated_text)
+    checkpoint = ModelCheckpoint(filepath=ARGS.directory+'/weight-{epoch:02d}.h5')
 
-            # We generate 400 characters
-            for i in range(400):
-                sampled = np.zeros((1, maxlen))
-                for t, char in enumerate(generated_text):
-                    sampled[0, t] = char_indices[char]
+    if not ARGS.diagnosis:
+        model.fit(x, y, batch_size=batch_size, epochs=epochs, callbacks=[checkpoint])
+    else:
+        for i in range(epochs):
+            print('Epoch %d' % i)
+            # Fit the model for 1 epoch on the available training data
+            model.fit(x, y,
+                      batch_size=batch_size,
+                      epochs=1,
+                      callbacks=[checkpoint])
 
-                preds = model.predict(sampled, verbose=0)[0]
-                next_index = sample(preds, temperature)
-                next_char = chars[next_index]
+            # get some random set of 3        
+            example_sample = []
+            sampled = np.zeros((1, maxlen))
+            sampled[0, :] = np.random.randint(0, 193, maxlen)
+            for s in sampled[0, :]:
+                example_sample.append(s)
+            
+            # generate 27 characters or if termination hits
+            for j in range(20):
+                preds = model.predict(sampled, verbose = 0)[0]
+                next_code = sample(preds, temperature)
+                example_sample.append(next_code)
+                if next_code == 193 or next_code == 194:
+                    break
+                sampled[0, :maxlen-1] = sampled[0, 1:]
+                sampled[0, maxlen-1] = next_code
+            print(example_sample)
 
-                generated_text += next_char
-                generated_text = generated_text[1:]
+            # see training error at the end of epoch
+            total_loss = 0
+            
+            for m in range(x.shape[0]):
+                train_preds = model.predict(x[m].reshape((1, maxlen)), verbose = 0)[0]
+                total_loss += sample(train_preds, temperature) != np.argmax(y[m,:])
 
-                sys.stdout.write(next_char)
-                sys.stdout.flush()
-            print()
+            print('Total loss %d out of %d' % (total_loss, x.shape[0]))
 
 def parse_arguments(parser):
     """Read user arguments"""
     parser.add_argument('--num_codes', type=int, required=True,
                         help='Number of medical codes')
-    parser.add_argument('--emb_size', type=int, default=10,
+    parser.add_argument('--emb_size', type=int, default=40,
                         help='Size of the embedding layer')
     parser.add_argument('--maxlen', type=int, default=3,
-                        help='Size of the embedding layer')
-    parser.add_argument('--epochs', type=int, default=1,
+                        help='Maximum size of LSTM')
+    parser.add_argument('--epochs', type=int, default=10,
                         help='Number of epochs')
+    parser.add_argument('--batch_size', type=int, default=128,
+                        help='Batch size')
     parser.add_argument('--path_data_train', type=str, default='data/data_train.pkl',
                         help='Path to train data')
     parser.add_argument('--path_target_train', type=str, default='data/target_train.pkl',
                         help='Path to train target')
+    parser.add_argument('--directory', type=str, default='./',
+                        help='Path to output models')
+    parser.add_argument('--diagnosis', type=bool, default=False,
+                        help='Print for each epoch if True, but no checkpoint')
+    parser.add_argument('--codify', type=bool, default=False,
+                        help='Codify the codes coming into 1 code per visit')
+    parser.add_argument('--simple', type=bool, default=False,
+                        help='If simple, then process differently')
     args = parser.parse_args()
 
     return args

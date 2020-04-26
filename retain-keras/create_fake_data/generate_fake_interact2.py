@@ -10,10 +10,10 @@ from sklearn.linear_model import LogisticRegression
 if __name__ == '__main__':
     out_directory = sys.argv[1]
     N = int(sys.argv[2])
-    train_proportion = float(sys.argv[3])
+    TIME = int(sys.argv[3])
+    train_proportion = float(sys.argv[4])
 
     # data point t
-    TIME = 30
     OFFSET = 4
     DOSAGE = 5
 
