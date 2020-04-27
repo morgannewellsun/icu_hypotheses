@@ -38,12 +38,12 @@ def main(ARGS):
         med2_codes = [16, 32, 48]
         
         for i in range(ARGS.num_generate):
-            med2_patient = np.random.choice(med2_codes, ARGS.maxlen).reshape((1, ARGS.maxlen))
+            med2_patient = np.random.choice(med2_codes, ARGS.maxlen)
             both_patient = np.copy(med2_patient)
             both_patient[0,-1] += np.random.randint(1,4)
 
-            med2_list = med2_patient.copy().tolist()[0]
-            both_list = both_patient.copy().tolist()[0]
+            med2_list = med2_patient.copy().tolist()
+            both_list = both_patient.copy().tolist()
 
             for n in range(ARGS.max_visits):
                 preds = model.predict(med2_patient, verbose = 0)[0]
@@ -98,8 +98,8 @@ def main(ARGS):
                 both_sequence[2*n+exp_num] = med1_both[n]
                 both_sequence[2*n+1+exp_num] = med2_both[n]
 
-            med2_list = med2_sequence.copy().tolist()[0]
-            both_list = both_sequence.copy().tolist()[0]
+            med2_list = med2_sequence.copy().tolist()
+            both_list = both_sequence.copy().tolist()
 
             for n in range(ARGS.max_visits):
                 preds = model.predict(med2_patient, verbose = 0)[0]
@@ -137,7 +137,7 @@ def parse_arguments(parser):
     parser.add_argument('--path_model', type=str, default='data/data_train.pkl',
                         help='Path to train data')
     parser.add_argument('--directory', type=str, default='./',
-                        help='Path to output models')
+                        help='Path to output, if any')
     parser.add_argument('--maxlen', type=int, default=3,
                         help='Maximum length of LSTM')
     parser.add_argument('--num_generate', type=int, default=100,
