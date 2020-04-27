@@ -32,7 +32,7 @@ def main(ARGS):
     # experiment 1: Give med2 only then give 1 med1.
     # Start off with either 3 med2's, or 2 med2's and both.
 
-    temperature = 1.0
+    temperature = 0.1
 
     if ARGS.decodify:
         med2_codes = [16, 32, 48]
@@ -63,9 +63,9 @@ def main(ARGS):
                 both_sequence[0, :ARGS.maxlen-1] = both_sequence[0, 1:]
                 both_sequence[0, ARGS.maxlen-1] = next_code
 
-            if med2_list[-1] != 193:
+            if med2_list[-1] != 193 or med2_list[-1] != 194:
                 med2_list.append(194)
-            if both_list[-1] != 193:
+            if both_list[-1] != 193 or both_list[-1] != 194:
                 both_list.append(194)
 
 
