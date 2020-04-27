@@ -38,30 +38,30 @@ def main(ARGS):
         med2_codes = [16, 32, 48]
         
         for i in range(ARGS.num_generate):
-            med2_patient = np.random.choice(med2_codes, ARGS.maxlen).reshape((1, ARGS.maxlen))
-            both_patient = np.copy(med2_patient)
-            both_patient[0,-1] += np.random.randint(1,4)
+            med2_sequence = np.random.choice(med2_codes, ARGS.maxlen).reshape((1, ARGS.maxlen))
+            both_sequence = np.copy(med2_sequence)
+            both_sequence[0,-1] += np.random.randint(1,4)
 
-            med2_list = med2_patient.copy().tolist()[0]
-            both_list = both_patient.copy().tolist()[0]
+            med2_list = med2_sequence.copy().tolist()[0]
+            both_list = both_sequence.copy().tolist()[0]
 
             for n in range(ARGS.max_visits):
-                preds = model.predict(med2_patient, verbose = 0)[0]
+                preds = model.predict(med2_sequence, verbose = 0)[0]
                 next_code = sample(preds, temperature)
                 med2_list.append(next_code)
                 if next_code == 193 or next_code == 194:
                     break
-                med2_patient[0, :ARGS.maxlen-1] = med2_patient[0, 1:]
-                med2_patient[0, ARGS.maxlen-1] = next_code
+                med2_sequence[0, :ARGS.maxlen-1] = med2_sequence[0, 1:]
+                med2_sequence[0, ARGS.maxlen-1] = next_code
 
             for n in range(ARGS.max_visits):
-                preds = model.predict(both_patient, verbose = 0)[0]
+                preds = model.predict(both_sequence, verbose = 0)[0]
                 next_code = sample(preds, temperature)
                 both_list.append(next_code)
                 if next_code == 193 or next_code == 194:
                     break
-                both_patient[0, :ARGS.maxlen-1] = both_patient[0, 1:]
-                both_patient[0, ARGS.maxlen-1] = next_code
+                both_sequence[0, :ARGS.maxlen-1] = both_sequence[0, 1:]
+                both_sequence[0, ARGS.maxlen-1] = next_code
 
             if med2_list[-1] != 193:
                 med2_list.append(194)
@@ -101,22 +101,22 @@ def main(ARGS):
             both_list = both_sequence.copy().tolist()[0]
 
             for n in range(ARGS.max_visits):
-                preds = model.predict(med2_patient, verbose = 0)[0]
+                preds = model.predict(med2_sequence, verbose = 0)[0]
                 next_code = sample(preds, temperature)
                 med2_list.append(next_code)
                 if next_code in termination:
                     break
-                med2_patient[0, :ARGS.maxlen-1] = med2_patient[0, 1:]
-                med2_patient[0, ARGS.maxlen-1] = next_code
+                med2_sequence[0, :ARGS.maxlen-1] = med2_sequence[0, 1:]
+                med2_sequence[0, ARGS.maxlen-1] = next_code
 
             for n in range(ARGS.max_visits):
-                preds = model.predict(both_patient, verbose = 0)[0]
+                preds = model.predict(both_sequence, verbose = 0)[0]
                 next_code = sample(preds, temperature)
                 both_list.append(next_code)
                 if next_code in termination:
                     break
-                both_patient[0, :ARGS.maxlen-1] = both_patient[0, 1:]
-                both_patient[0, ARGS.maxlen-1] = next_code
+                both_sequence[0, :ARGS.maxlen-1] = both_sequence[0, 1:]
+                both_sequence[0, ARGS.maxlen-1] = next_code
 
             if med2_list[-1] != termination[0]:
                 med2_list.append(termination[1])
