@@ -27,6 +27,8 @@ if __name__ == '__main__':
     morts = []
     types = {}
 
+    time_death = []
+
     # for every patient
     for n in range(N):
         health = [np.random.normal() - OFFSET]
@@ -90,6 +92,7 @@ if __name__ == '__main__':
             mort = np.random.binomial(1, 1/(1+math.exp(health[i]/2+OFFSET+1)))
             if mort:
                 morts.append(1)
+                time_death.append(i)
                 break
         
         patients.append(patient)
@@ -97,6 +100,9 @@ if __name__ == '__main__':
         if not mort:
             morts.append(0)
 
+
+    plt.hist(time_death)
+    plt.show()
 
     # for logistic regression
     logreg_train, logreg_test = train_test_split(logreg_patients, train_size=train_proportion, random_state=12345)
@@ -109,7 +115,7 @@ if __name__ == '__main__':
     print('Mean accuracy: %f' % mean_accuracy)
 
     # for RNN
-    all_data = pd.DataFrame(data={'codes': patients}, columns=['codes']).reset_index()
+    '''all_data = pd.DataFrame(data={'codes': patients}, columns=['codes']).reset_index()
     all_targets = pd.DataFrame(data={'target': morts},columns=['target']).reset_index()
 
     data_train,data_test = train_test_split(all_data, train_size=train_proportion, random_state=12345)
@@ -120,4 +126,4 @@ if __name__ == '__main__':
     target_train.sort_index().to_pickle(out_directory+'/target_train.pkl')
     target_test.sort_index().to_pickle(out_directory+'/target_test.pkl')
 
-    pickle.dump(types, open(out_directory+'/dictionary.pkl', 'wb'), -1)
+    pickle.dump(types, open(out_directory+'/dictionary.pkl', 'wb'), -1)'''

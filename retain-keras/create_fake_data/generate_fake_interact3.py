@@ -27,6 +27,8 @@ if __name__ == '__main__':
     morts = []
     types = {}
 
+    time_death = []
+
     # for every patient
     for n in range(N):
         health = [np.random.normal() - OFFSET]
@@ -90,6 +92,7 @@ if __name__ == '__main__':
             mort = np.random.binomial(1, 1/(1+math.exp(health[i]/2+OFFSET+1)))
             if mort:
                 morts.append(1)
+                time_death.append(i)
                 break
         
         patients.append(patient)
@@ -97,7 +100,8 @@ if __name__ == '__main__':
         if not mort:
             morts.append(0)
 
-
+    plt.hist(time_death)
+    plt.show()
     # for logistic regression
     logreg_train, logreg_test = train_test_split(logreg_patients, train_size=train_proportion, random_state=12345)
     logreg_train_label, logreg_test_label = train_test_split(morts, train_size=train_proportion, random_state=12345)
