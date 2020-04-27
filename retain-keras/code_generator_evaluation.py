@@ -104,7 +104,6 @@ def main(ARGS):
                 preds = model.predict(med2_sequence, verbose = 0)[0]
                 next_code = sample(preds, temperature)
                 med2_list.append(next_code)
-                print(next_code)
                 if next_code in termination:
                     break
                 med2_sequence[0, :ARGS.maxlen-1] = med2_sequence[0, 1:]
