@@ -38,12 +38,12 @@ def main(ARGS):
         med2_codes = [16, 32, 48]
         
         for i in range(ARGS.num_generate):
-            med2_patient = np.random.choice(med2_codes, ARGS.maxlen)
+            med2_patient = np.random.choice(med2_codes, ARGS.maxlen).reshape((1, ARGS.maxlen))
             both_patient = np.copy(med2_patient)
             both_patient[0,-1] += np.random.randint(1,4)
 
-            med2_list = med2_patient.copy().tolist()
-            both_list = both_patient.copy().tolist()
+            med2_list = med2_patient.copy().tolist()[0]
+            both_list = both_patient.copy().tolist()[0]
 
             for n in range(ARGS.max_visits):
                 preds = model.predict(med2_patient, verbose = 0)[0]
@@ -87,19 +87,18 @@ def main(ARGS):
             live_num = int((ARGS.maxlen - exp_num)/2) # 10x2 for total 50
 
 
-            med2_sequence = np.random.choice(med2_codes, ARGS.maxlen)
-            both_sequence = np.zeros(ARGS.maxlen)
-            both_sequence[:exp_num] = med2_sequence[:exp_num]
+            med2_sequence = np.random.choice(med2_codes, ARGS.maxlen).reshape((1, ARGS.maxlen))
+            both_sequence = np.copy(med2_sequence)
 
             med1_both = np.random.choice(med1_codes, live_num)
             med2_both = np.random.choice(med2_codes, live_num)
             # place lattice
             for n in range(live_num):
-                both_sequence[2*n+exp_num] = med1_both[n]
-                both_sequence[2*n+1+exp_num] = med2_both[n]
+                both_sequence[0, 2*n+exp_num] = med1_both[n]
+                both_sequence[0, 2*n+1+exp_num] = med2_both[n]
 
-            med2_list = med2_sequence.copy().tolist()
-            both_list = both_sequence.copy().tolist()
+            med2_list = med2_sequence.copy().tolist()[0]
+            both_list = both_sequence.copy().tolist()[0]
 
             for n in range(ARGS.max_visits):
                 preds = model.predict(med2_patient, verbose = 0)[0]
