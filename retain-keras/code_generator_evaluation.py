@@ -79,7 +79,7 @@ def main(ARGS):
             termination = [12, 13]
         else:
             med2_codes = np.arange(18, 36)
-            med1_codes = np.aranage(0, 18)
+            med1_codes = np.arange(0, 18)
             termination = [63, 64]
 
         for i in range(ARGS.num_generate):
