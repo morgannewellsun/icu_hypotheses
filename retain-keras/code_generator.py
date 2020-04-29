@@ -128,9 +128,14 @@ def main(ARGS):
     if ARGS.codify:
         print('Codifying Data...')
         x, y = codify(data_train, y_train, num_codes, maxlen)
+        termination = [193, 194]
     else:
         print('Processing Data...')
         x, y = process(data_train, y_train, num_codes, maxlen, ARGS.simple)
+        if ARGS.simple:
+            termination = [12, 13]
+        else:
+            termination = [63, 64]
 
     print('Creating Model...')
     input_layer = layers.Input((maxlen,), name='time_input')
@@ -182,19 +187,19 @@ def main(ARGS):
                       epochs=1,
                       callbacks=[checkpoint])
 
-            # get some random set of 3        
+            # get some random set of maxlen   
             example_sample = []
             sampled = np.zeros((1, maxlen))
-            sampled[0, :] = np.random.randint(0, 193, maxlen)
+            sampled[0, :] = np.random.randint(0, termination[0], maxlen)
             for s in sampled[0, :]:
-                example_sample.append(s)
+                example_sample.append(int(s))
             
             # generate 27 characters or if termination hits
             for j in range(20):
                 preds = model.predict(sampled, verbose = 0)[0]
                 next_code = sample(preds, temperature)
                 example_sample.append(next_code)
-                if next_code == 193 or next_code == 194:
+                if next_code in termination:
                     break
                 sampled[0, :maxlen-1] = sampled[0, 1:]
                 sampled[0, maxlen-1] = next_code

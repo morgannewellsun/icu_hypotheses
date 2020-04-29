@@ -32,7 +32,7 @@ def main(ARGS):
     # experiment 1: Give med2 only then give 1 med1.
     # Start off with either 3 med2's, or 2 med2's and both.
 
-    temperature = 0.01
+    temperature = 0.8
 
     if ARGS.decodify:
         med2_codes = [16, 32, 48]
