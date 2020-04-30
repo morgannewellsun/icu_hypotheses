@@ -58,17 +58,17 @@ if __name__ == '__main__':
 
             # interactive of both medications
             if admin[0] and admin[1]:
-                health_delta += np.random.normal(0.3 * avgmed, 0.1)
+                health_delta += np.random.normal(0.5 * avgmed, 0.1)
                 visit.append(code1)
                 visit.append(code2)
                 logreg_patient[4*i] = med1
                 logreg_patient[4*i+1] = med2
             elif admin[0]:
-                health_delta += np.random.normal(0.1 * med1, 0.1)
+                health_delta += np.random.normal(0.3 * med1, 0.1)
                 visit.append(code1)
                 logreg_patient[4*i] = med1
             elif admin[1]:
-                health_delta += np.random.normal(-0.75 * med2, 0.1)
+                health_delta += np.random.normal(-0.4 * med2, 0.1)
                 visit.append(code2)
                 logreg_patient[4*i+1] = med2
 
