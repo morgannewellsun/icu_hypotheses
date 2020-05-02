@@ -159,6 +159,7 @@ def main(ARGS):
     model = Model(input=input_layer, output=predictions)
     optimizer = RMSprop(lr=0.01)
     model.compile(loss='categorical_crossentropy', optimizer=optimizer)
+    model.cuda()
 
 
 
