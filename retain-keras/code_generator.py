@@ -159,9 +159,8 @@ def main(ARGS):
     model = Model(input=input_layer, output=predictions)
     optimizer = RMSprop(lr=0.01)
     model.compile(loss='categorical_crossentropy', optimizer=optimizer)
-    model.cuda()
 
-
+    
 
     def sample(preds, temperature=1.0):
         preds = np.asarray(preds).astype('float64')
