@@ -128,6 +128,10 @@ def main(ARGS):
             med2_list = med2_sequence.copy().tolist()[0]
             both_list = both_sequence.copy().tolist()[0]
 
+            # clip
+            med2_list = med2_list[-4:]
+            both_list = both_list[-4:]
+
             for n in range(ARGS.max_visits):
                 preds = model.predict(med2_sequence, verbose = 0)[0]
                 next_code = sample(preds, temperature)
@@ -156,19 +160,14 @@ def main(ARGS):
             both_patient, mort = visitize(both_list, termination)
             morts.append(mort)
 
-            print(med2_list)
-            print(both_list)
-
             patients.append(med2_patient)
             patients.append(both_patient)
         
-    print(patients)
-    print(morts)
     all_data = pd.DataFrame(data={'codes': patients}, columns=['codes']).reset_index()
     all_targets = pd.DataFrame(data={'target': morts},columns=['target']).reset_index()
 
-    all_data.sort_index().to_pickle(ARGS.directory+'/data_train.pkl')
-    all_targets.sort_index().to_pickle(ARGS.directory+'/target_train.pkl')
+    all_data.sort_index().to_pickle(ARGS.directory+'/data_test.pkl')
+    all_targets.sort_index().to_pickle(ARGS.directory+'/target_test.pkl')
 
 
 def parse_arguments(parser):
