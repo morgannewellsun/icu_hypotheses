@@ -24,9 +24,33 @@ def sample(preds, temperature=1.0):
         probas = np.random.multinomial(1, preds, 1)
         return np.argmax(probas)
 
+def visitize(seq, termination):
+    patient = []
+    code_active = -1
+    visit = []
+    for i, code in enumerate(seq):
+        if i == len(seq)-1:
+            break
+        code_type = (int)(code/3)
+        if code_active >= code_type:
+            patient.append(visit)
+            visit = []
+
+        visit.append(code)
+        code_active = code_type
+
+    if seq[-1] == termination[0]:
+        mort = 1
+    else:
+        mort = 0
+
+    return patient, mort
+
+
 def main(ARGS):
     model = import_model(ARGS.path_model)
     patients = []
+    morts = []
 
 
     # experiment 1: Give med2 only then give 1 med1.
@@ -68,9 +92,13 @@ def main(ARGS):
             if both_list[-1] != 193 or both_list[-1] != 194:
                 both_list.append(194)
 
+            med2_patient, mort = visitize(med2_list)
+            morts.append(mort)
+            both_patient, mort = visitize(both_list)
+            morts.append(mort)
 
-            patients.append(med2_list)
-            patients.append(both_list)
+            patients.append(med2_patient, termination)
+            patients.append(both_patient, termination)
         
     else:
         if ARGS.simple:
@@ -123,12 +151,24 @@ def main(ARGS):
             if both_list[-1] not in termination:
                 both_list.append(termination[1])
 
+            med2_patient, mort = visitize(med2_list, termination)
+            morts.append(mort)
+            both_patient, mort = visitize(both_list, termination)
+            morts.append(mort)
 
-            patients.append(med2_list)
-            patients.append(both_list)
+            print(med2_list)
+            print(both_list)
+
+            patients.append(med2_patient)
+            patients.append(both_patient)
         
-    for p in patients:
-        print(p)
+    print(patients)
+    print(morts)
+    all_data = pd.DataFrame(data={'codes': patients}, columns=['codes']).reset_index()
+    all_targets = pd.DataFrame(data={'target': morts},columns=['target']).reset_index()
+
+    all_data.sort_index().to_pickle(ARGS.directory+'/data_train.pkl')
+    all_targets.sort_index().to_pickle(ARGS.directory+'/target_train.pkl')
 
 
 def parse_arguments(parser):
