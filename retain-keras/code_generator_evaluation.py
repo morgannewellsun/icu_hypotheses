@@ -52,6 +52,7 @@ def main(ARGS):
     patients = []
     morts = []
 
+    step = int(ARGS.num_generate/10)
 
     # experiment 1: Give med2 only then give 1 med1.
     # Start off with either 3 med2's, or 2 med2's and both.
@@ -62,6 +63,8 @@ def main(ARGS):
         med2_codes = [16, 32, 48]
         
         for i in range(ARGS.num_generate):
+            if i % step == 0:
+                print('Generating %d out of %d' % (i, ARGS.num_generate))
             med2_sequence = np.random.choice(med2_codes, ARGS.maxlen).reshape((1, ARGS.maxlen))
             both_sequence = np.copy(med2_sequence)
             both_sequence[0,-1] += np.random.randint(1,4)
@@ -111,6 +114,9 @@ def main(ARGS):
             termination = [63, 64]
 
         for i in range(ARGS.num_generate):
+            if i % step == 0:
+                print('Generating %d out of %d' % (i, ARGS.num_generate))
+                
             exp_num = int(ARGS.maxlen * 3 / 5) # 30
             live_num = int((ARGS.maxlen - exp_num)/2) # 10x2 for total 50
 
@@ -129,8 +135,8 @@ def main(ARGS):
             both_list = both_sequence.copy().tolist()[0]
 
             # clip
-            med2_list = med2_list[-4:]
-            both_list = both_list[-4:]
+            med2_list = med2_list[-2:]
+            both_list = both_list[-2:]
 
             for n in range(ARGS.max_visits):
                 preds = model.predict(med2_sequence, verbose = 0)[0]
