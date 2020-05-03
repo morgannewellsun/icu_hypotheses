@@ -136,7 +136,7 @@ def main(ARGS):
             both_list = both_sequence.copy().tolist()[0]
 
             # clip
-            med2_list = med2_list[-2:]
+            med2_list = med2_list[-1:]
             both_list = both_list[-2:]
 
             for n in range(ARGS.max_visits):
