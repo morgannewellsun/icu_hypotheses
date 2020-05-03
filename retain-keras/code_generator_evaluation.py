@@ -39,6 +39,7 @@ def visitize(seq, termination):
         visit.append(code)
         code_active = code_type
 
+    patient.append(visit)
     if seq[-1] == termination[0]:
         mort = 1
     else:
