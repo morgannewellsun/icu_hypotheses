@@ -8,8 +8,8 @@ def main(ARGS):
 	total_mort = np.sum(y_train)
 	if ARGS.doubled:
 		y_train = y_train[::2]
-		print('Case 1: %d expired out of %d' % (np.sum(y_train), int(len(y_train)/2)))
-		print('Case 2: %d expired out of %d' % (total_mort - np.sum(y_train), int(len(y_train)/2)))
+		print('Case 1: %d expired out of %d' % (np.sum(y_train), len(y_train)))
+		print('Case 2: %d expired out of %d' % (total_mort - np.sum(y_train), len(y_train)))
 	else:
 		print('%d expired out of %d' % (total_mort, len(y_train)))
 
