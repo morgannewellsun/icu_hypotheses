@@ -123,7 +123,7 @@ def main(ARGS):
 
             med1_list = med1_sequence.copy().tolist()[0]
 
-            med1_list = med1_list[-1:]
+            med1_list = med1_list[-2:]
 
             for n in range(ARGS.max_visits):
                 preds = model.predict(med1_sequence, verbose = 0)[0]
