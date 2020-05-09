@@ -117,12 +117,16 @@ def main(ARGS):
 
         med2_patient, mort = visitize(med2_list, termination)
         morts.append(mort)
+
+        print(med2_list)
+        print(mort)
+
         both_patient, mort = visitize(both_list, termination)
         morts.append(mort)
 
         patients.append(med2_patient)
         patients.append(both_patient)
-        print(med2_list)
+        
         print(both_list)
         print(mort)
 
