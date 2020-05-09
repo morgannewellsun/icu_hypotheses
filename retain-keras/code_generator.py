@@ -22,7 +22,7 @@ def process(data_train, y_train, num_codes, maxlen, simple):
     for i, patient in enumerate(data_train):
 
         # get the code sequence into an interable list
-        patient_sequence = []
+        patient_sequence = [0] * (maxlen - 1) # zero pad
         for visit in patient:
             for code in visit:
                 patient_sequence.append(code+1)
@@ -37,10 +37,6 @@ def process(data_train, y_train, num_codes, maxlen, simple):
                 patient_sequence.append(13+1)
             else:
                 patient_sequence.append(64) # released
-
-        # skip if patient cannot supply maximum length
-        if len(patient_sequence) <= maxlen:
-            patient_sequence = [0] * (maxlen+1-len(patient_sequence)) + patient_sequence # zero pad for variable length
 
         num_sequences += len(patient_sequence) - maxlen
 

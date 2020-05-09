@@ -31,6 +31,10 @@ def visitize(seq, termination):
     for i, code in enumerate(seq):
         if i == len(seq)-1:
             break
+        if code == 0:
+            continue
+        else:
+            code -= 1
         code_type = (int)(code/3)
         if code_active >= code_type:
             patient.append(visit)
