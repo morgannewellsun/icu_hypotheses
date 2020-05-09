@@ -86,6 +86,9 @@ def main(ARGS):
         both_sequence = np.copy(med2_sequence)
         both_sequence[0, -1] = np.random.choice(med1_codes, 1) # just substitute 1
 
+        med2_sequence = med2_sequence.astype(int)
+        both_sequence = both_sequence.astype(int)
+
         med2_list = med2_sequence.copy().tolist()[0]
         both_list = both_sequence.copy().tolist()[0]
 
