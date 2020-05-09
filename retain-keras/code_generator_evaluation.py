@@ -81,7 +81,7 @@ def main(ARGS):
         live_num = int((ARGS.maxlen - exp_num)/2) # 10x2 for total 50
 
         med2_sequence = np.zeros((1, ARGS.maxlen))
-        duration = 6
+        duration = 10
         med2_sequence[0, -duration:] = np.random.choice(med2_codes, duration)
         both_sequence = np.copy(med2_sequence)
         both_sequence[0, -1] = np.random.choice(med1_codes, 1) # just substitute 1
