@@ -134,8 +134,10 @@ def main(ARGS):
         x, y = process(data_train, y_train, num_codes, maxlen, ARGS.simple)
         if ARGS.simple:
             termination = [12, 13]
+            nothing = 14
         else:
             termination = [63, 64]
+            nothing = 65
 
     print('Creating Model...')
     input_layer = layers.Input((maxlen,), name='time_input')
