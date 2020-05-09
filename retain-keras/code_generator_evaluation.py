@@ -169,7 +169,9 @@ def main(ARGS):
 
             patients.append(med2_patient)
             patients.append(both_patient)
-        
+
+    print(np.sum(morts))
+
     all_data = pd.DataFrame(data={'codes': patients}, columns=['codes']).reset_index()
     all_targets = pd.DataFrame(data={'target': morts},columns=['target']).reset_index()
 
