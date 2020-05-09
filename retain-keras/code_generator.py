@@ -15,60 +15,6 @@ def read_data(ARGS):
 
     return (x_train, y_train)
 
-def codify(data_train, y_train, num_codes, maxlen = 3):
-    # preprocess
-    processed_patients = []
-    sample_size = 0
-    for i, patient in enumerate(data_train):
-        if len(patient) < maxlen:
-            continue
-        processed_patient = []
-        for visit in patient:
-            if len(visit) == 0:
-                processed_patient.append(192) # nothing happened
-
-            single_code = 0
-            base = np.zeros(3) # this is in base 4
-
-            for code in visit:
-                if code < 3:
-                    base[0] = code+1
-                elif code < 6:
-                    base[1] = code-3+1
-                elif code < 9:
-                    base[2] = code-6+1
-                else:
-                    single_code = base[0] + base[1] * 4 + base[2] * 16
-               
-                if code == 10:
-                    single_code += 64
-                elif code == 11:
-                    single_code += 64 * 2
-
-            processed_patient.append(single_code)
-        # put in 1 more code for how it ended
-        if y_train[i] == 1:
-            processed_patient.append(193)
-        else:
-            processed_patient.append(194)
-
-        sample_size += len(processed_patient) - maxlen + 1
-
-        processed_patients.append(processed_patient)
-
-    # process and output
-    x = np.zeros((sample_size, maxlen))
-    y = np.zeros((sample_size, num_codes))
-    count = 0
-    for patient in processed_patients:
-        for i in range(len(patient)-maxlen):
-            x[count,:] = patient[i:i+maxlen]
-            y[count, int(patient[i+maxlen])] = 1
-            count += 1
-
-    print('Found %d sequences of length %d among %d patients' % (sample_size, maxlen, len(processed_patients)))
-    return x, y
-
 def process(data_train, y_train, num_codes, maxlen, simple):
     
     num_sequences = 0
@@ -79,24 +25,24 @@ def process(data_train, y_train, num_codes, maxlen, simple):
         patient_sequence = []
         for visit in patient:
             for code in visit:
-                patient_sequence.append(code)
+                patient_sequence.append(code+1)
 
         if y_train[i] == 1:
             if simple:
-                patient_sequence.append(12) # expired
+                patient_sequence.append(12+1) # expired
             else:
                 patient_sequence.append(63)
         else:
             if simple:
-                patient_sequence.append(13)
+                patient_sequence.append(13+1)
             else:
                 patient_sequence.append(64) # released
 
         # skip if patient cannot supply maximum length
-        if len(patient_sequence) < maxlen:
-            continue
+        if len(patient_sequence) <= maxlen:
+            patient_sequence = [0] * (maxlen+1-len(patient_sequence)) + patient_sequence # zero pad for variable length
 
-        num_sequences += len(patient_sequence) - maxlen + 1
+        num_sequences += len(patient_sequence) - maxlen
 
         all_sequences.append(patient_sequence)
 
@@ -125,19 +71,14 @@ def main(ARGS):
     print('Reading Data...')
     data_train, y_train = read_data(ARGS)
 
-    if ARGS.codify:
-        print('Codifying Data...')
-        x, y = codify(data_train, y_train, num_codes, maxlen)
-        termination = [193, 194]
+    print('Processing Data...')
+    x, y = process(data_train, y_train, num_codes, maxlen, ARGS.simple)
+    if ARGS.simple:
+        termination = [12, 13]
+        nothing = 14
     else:
-        print('Processing Data...')
-        x, y = process(data_train, y_train, num_codes, maxlen, ARGS.simple)
-        if ARGS.simple:
-            termination = [12, 13]
-            nothing = 14
-        else:
-            termination = [63, 64]
-            nothing = 65
+        termination = [63, 64]
+        nothing = 65
 
     print('Creating Model...')
     input_layer = layers.Input((maxlen,), name='time_input')
@@ -236,8 +177,6 @@ def parse_arguments(parser):
                         help='Path to output models')
     parser.add_argument('--diagnosis', type=bool, default=False,
                         help='Print for each epoch if True, but no checkpoint')
-    parser.add_argument('--codify', type=bool, default=False,
-                        help='Codify the codes coming into 1 code per visit')
     parser.add_argument('--simple', type=bool, default=False,
                         help='If simple, then process differently')
     args = parser.parse_args()
