@@ -118,8 +118,6 @@ def main(ARGS):
         med2_patient, mort = visitize(med2_list, termination)
         morts.append(mort)
 
-        print(med2_list)
-        print(mort)
 
         both_patient, mort = visitize(both_list, termination)
         morts.append(mort)
@@ -127,15 +125,13 @@ def main(ARGS):
         patients.append(med2_patient)
         patients.append(both_patient)
         
-        print(both_list)
-        print(mort)
 
     print(np.sum(morts))
-    #all_data = pd.DataFrame(data={'codes': patients}, columns=['codes']).reset_index()
-    #all_targets = pd.DataFrame(data={'target': morts},columns=['target']).reset_index()
+    all_data = pd.DataFrame(data={'codes': patients}, columns=['codes']).reset_index()
+    all_targets = pd.DataFrame(data={'target': morts},columns=['target']).reset_index()
 
-    #all_data.sort_index().to_pickle(ARGS.directory+'/data_test.pkl')
-    #all_targets.sort_index().to_pickle(ARGS.directory+'/target_test.pkl')
+    all_data.sort_index().to_pickle(ARGS.directory+'/data_test.pkl')
+    all_targets.sort_index().to_pickle(ARGS.directory+'/target_test.pkl')
 
 
 def parse_arguments(parser):
