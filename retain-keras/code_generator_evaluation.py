@@ -76,9 +76,6 @@ def main(ARGS):
     for i in range(ARGS.num_generate):
         if i % step == 0:
             print('Generating %d out of %d' % (i, ARGS.num_generate))
-            
-        exp_num = int(ARGS.maxlen * 3 / 5) # 30
-        live_num = int((ARGS.maxlen - exp_num)/2) # 10x2 for total 50
 
         med2_sequence = np.zeros((1, ARGS.maxlen))
         duration = 2

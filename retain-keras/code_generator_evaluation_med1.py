@@ -31,6 +31,10 @@ def visitize(seq, termination):
     for i, code in enumerate(seq):
         if i == len(seq)-1:
             break
+        if code == 0:
+            continue
+        else:
+            code -= 1
         code_type = (int)(code/3)
         if code_active >= code_type:
             patient.append(visit)
@@ -59,89 +63,46 @@ def main(ARGS):
     # Start off with either 3 med2's, or 2 med2's and both.
 
     temperature = 0.8
-
-    if ARGS.decodify:
-        med2_codes = [16, 32, 48]
         
-        for i in range(ARGS.num_generate):
-            if i % step == 0:
-                print('Generating %d out of %d' % (i, ARGS.num_generate))
-            med2_sequence = np.random.choice(med2_codes, ARGS.maxlen).reshape((1, ARGS.maxlen))
-            both_sequence = np.copy(med2_sequence)
-            both_sequence[0,-1] += np.random.randint(1,4)
-
-            med2_list = med2_sequence.copy().tolist()[0]
-            both_list = both_sequence.copy().tolist()[0]
-
-            for n in range(ARGS.max_visits):
-                preds = model.predict(med2_sequence, verbose = 0)[0]
-                next_code = sample(preds, temperature)
-                med2_list.append(next_code)
-                if next_code == 193 or next_code == 194:
-                    break
-                med2_sequence[0, :ARGS.maxlen-1] = med2_sequence[0, 1:]
-                med2_sequence[0, ARGS.maxlen-1] = next_code
-
-            for n in range(ARGS.max_visits):
-                preds = model.predict(both_sequence, verbose = 0)[0]
-                next_code = sample(preds, temperature)
-                both_list.append(next_code)
-                if next_code == 193 or next_code == 194:
-                    break
-                both_sequence[0, :ARGS.maxlen-1] = both_sequence[0, 1:]
-                both_sequence[0, ARGS.maxlen-1] = next_code
-
-            if med2_list[-1] != 193 or med2_list[-1] != 194:
-                med2_list.append(194)
-            if both_list[-1] != 193 or both_list[-1] != 194:
-                both_list.append(194)
-
-            med2_patient, mort = visitize(med2_list)
-            morts.append(mort)
-            both_patient, mort = visitize(both_list)
-            morts.append(mort)
-
-            patients.append(med2_patient, termination)
-            patients.append(both_patient, termination)
-        
+    if ARGS.simple:
+        med2_codes = np.arange(4, 7)
+        med1_codes = np.arange(1, 4)
+        termination = [13, 14]
     else:
-        if ARGS.simple:
-            med2_codes = np.arange(3, 6)
-            med1_codes = np.arange(0, 3)
-            termination = [12, 13]
-        else:
-            med2_codes = np.arange(18, 36)
-            med1_codes = np.arange(0, 18)
-            termination = [63, 64]
+        med2_codes = np.arange(19, 37)
+        med1_codes = np.arange(1, 19)
+        termination = [64, 65]
 
-        for i in range(ARGS.num_generate):
-            if i % step == 0:
-                print('Generating %d out of %d' % (i, ARGS.num_generate))
+    for i in range(ARGS.num_generate):
+        if i % step == 0:
+            print('Generating %d out of %d' % (i, ARGS.num_generate))
 
 
-            med1_sequence = np.random.choice(med1_codes, ARGS.maxlen).reshape((1, ARGS.maxlen))
+        med2_sequence = np.zeros((1, ARGS.maxlen))
+        duration = 5
+        med2_sequence[0, -duration:] = np.random.choice(med1_codes, duration)
 
-            med1_list = med1_sequence.copy().tolist()[0]
+        med1_sequence = med1_sequence.astype(int)
 
-            med1_list = med1_list[-1:]
+        med1_list = med1_sequence.copy().tolist()[0]
 
-            for n in range(ARGS.max_visits):
-                preds = model.predict(med1_sequence, verbose = 0)[0]
-                next_code = sample(preds, temperature)
-                med1_list.append(next_code)
-                if next_code in termination:
-                    break
-                med1_sequence[0, :ARGS.maxlen-1] = med1_sequence[0, 1:]
-                med1_sequence[0, ARGS.maxlen-1] = next_code
+        for n in range(ARGS.max_visits):
+            preds = model.predict(med1_sequence, verbose = 0)[0]
+            next_code = sample(preds, temperature)
+            med1_list.append(next_code)
+            if next_code in termination:
+                break
+            med1_sequence[0, :ARGS.maxlen-1] = med1_sequence[0, 1:]
+            med1_sequence[0, ARGS.maxlen-1] = next_code
 
-          
-            if med1_list[-1] not in termination:
-                med1_list.append(termination[1])
+      
+        if med1_list[-1] not in termination:
+            med1_list.append(termination[1])
 
-            med1_patient, mort = visitize(med1_list, termination)
-            morts.append(mort)
+        med1_patient, mort = visitize(med1_list, termination)
+        morts.append(mort)
 
-            patients.append(med1_patient)
+        patients.append(med1_patient)
         
     all_data = pd.DataFrame(data={'codes': patients}, columns=['codes']).reset_index()
     all_targets = pd.DataFrame(data={'target': morts},columns=['target']).reset_index()
