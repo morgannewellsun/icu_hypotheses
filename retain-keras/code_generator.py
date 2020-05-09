@@ -70,11 +70,9 @@ def main(ARGS):
     print('Processing Data...')
     x, y = process(data_train, y_train, num_codes, maxlen, ARGS.simple)
     if ARGS.simple:
-        termination = [12, 13]
-        nothing = 14
+        termination = [12+1, 13+1]
     else:
-        termination = [63, 64]
-        nothing = 65
+        termination = [63+1, 64+1]
 
     print('Creating Model...')
     input_layer = layers.Input((maxlen,), name='time_input')
