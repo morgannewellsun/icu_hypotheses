@@ -79,7 +79,7 @@ def main(ARGS):
 
 
         med1_sequence = np.zeros((1, ARGS.maxlen))
-        duration = 5
+        duration = 2
         med1_sequence[0, -duration:] = np.random.choice(med1_codes, duration)
 
         med1_sequence = med1_sequence.astype(int)

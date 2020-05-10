@@ -81,7 +81,7 @@ def main(ARGS):
         duration = 2
         med2_sequence[0, -duration:] = np.random.choice(med2_codes, duration)
         both_sequence = np.copy(med2_sequence)
-        both_sequence[0, -1] = np.random.choice(med1_codes, 1) # just substitute 1
+        both_sequence[0, -2] = np.random.choice(med1_codes, 1) # just substitute 1
 
         med2_sequence = med2_sequence.astype(int)
         both_sequence = both_sequence.astype(int)
