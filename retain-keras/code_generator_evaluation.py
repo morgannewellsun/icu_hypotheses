@@ -78,8 +78,7 @@ def main(ARGS):
             print('Generating %d out of %d' % (i, ARGS.num_generate))
 
         med2_sequence = np.zeros((1, ARGS.maxlen))
-        duration = 2
-        med2_sequence[0, -duration:] = np.random.choice(med2_codes, duration)
+        med2_sequence[0, -ARGS.duration:] = np.random.choice(med2_codes, ARGS.duration)
         both_sequence = np.copy(med2_sequence)
         both_sequence[0, -2] = np.random.choice(med1_codes, 1) # just substitute 1
 
@@ -147,6 +146,8 @@ def parse_arguments(parser):
                         help='Decode if codified already')
     parser.add_argument('--simple', type=bool, default=False,
                         help='If simple, then process differently')
+    parser.add_argument('--duration', type=int, default=2,
+                        help='Duration of experiment treatment')
     args = parser.parse_args()
 
     return args

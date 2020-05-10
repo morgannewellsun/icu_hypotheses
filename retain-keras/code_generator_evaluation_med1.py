@@ -79,8 +79,7 @@ def main(ARGS):
 
 
         med1_sequence = np.zeros((1, ARGS.maxlen))
-        duration = 2
-        med1_sequence[0, -duration:] = np.random.choice(med1_codes, duration)
+        med1_sequence[0, -ARGS.duration:] = np.random.choice(med1_codes, ARGS.duration)
 
         med1_sequence = med1_sequence.astype(int)
 
@@ -127,6 +126,8 @@ def parse_arguments(parser):
                         help='Decode if codified already')
     parser.add_argument('--simple', type=bool, default=False,
                         help='If simple, then process differently')
+    parser.add_argument('--duration', type=int, default=2,
+                        help='Duration of experiment treatment')
     args = parser.parse_args()
 
     return args
