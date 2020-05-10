@@ -78,9 +78,9 @@ def main(ARGS):
             print('Generating %d out of %d' % (i, ARGS.num_generate))
 
 
-        med2_sequence = np.zeros((1, ARGS.maxlen))
+        med1_sequence = np.zeros((1, ARGS.maxlen))
         duration = 5
-        med2_sequence[0, -duration:] = np.random.choice(med1_codes, duration)
+        med1_sequence[0, -duration:] = np.random.choice(med1_codes, duration)
 
         med1_sequence = med1_sequence.astype(int)
 
