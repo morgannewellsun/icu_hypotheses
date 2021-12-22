@@ -176,6 +176,11 @@ def get_importances(alphas, betas, patient_data, model_parameters, dictionary):
         time = np.arange(len(codes))
     for i in range(len(patient_data[0][0])):
         visit_codes = codes[i]
+
+        # added conditional to deal with empty visits
+        if len(visit_codes) == 0:
+            raise Exception("Empty visit detected. This patient might have no medical codes across all visits.")
+
         visit_beta = betas[i]
         visit_alpha = alphas[i][0]
         relevant_indices = np.append(visit_codes,
