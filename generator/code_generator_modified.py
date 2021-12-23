@@ -1,11 +1,11 @@
 
 import argparse
 
-# import keras
 from keras.models import Model
 from keras import layers
 from keras.optimizers import RMSprop
 from keras.callbacks import ModelCheckpoint, CSVLogger
+from keras.metrics import CategoricalAccuracy
 import numpy as np
 import pandas as pd
 
@@ -88,11 +88,15 @@ def main(args):
     predictions = layers.Dense(num_codes+3, activation='softmax')(attention_activations)
     model = Model(input=input_layer, output=predictions)
     optimizer = RMSprop(lr=0.01)
-    model.compile(loss='categorical_crossentropy', optimizer=optimizer)
+    model.compile(
+        loss='categorical_crossentropy',
+        optimizer=optimizer,
+        metrics=[CategoricalAccuracy(name="accuracy", dtype=None)],)
 
     print('Training Model...')
     checkpoint = ModelCheckpoint(filepath=args.directory + '/weight-{epoch:02d}.h5')
     csv_logger = CSVLogger(filename=args.directory + '/logs.csv')
+
     model.fit(
         x_train, y_train,
         validation_data=(x_val, y_val),
