@@ -23,6 +23,7 @@ def main(
         visits = []
         for _ in range(n_timesteps):
             if phase == 0:
+            # if phase > period // 2:
                 visits.append([1])
             else:
                 visits.append([0])
@@ -40,12 +41,12 @@ def main(
     val_proportion_adjusted = val_proportion / (1 - train_proportion)
     data_val, data_test = train_test_split(data_val_test, train_size=val_proportion_adjusted, random_state=12345)
     target_val, target_test = train_test_split(target_val_test, train_size=val_proportion_adjusted, random_state=12345)
-    data_train.sort_index().to_pickle(out_directory + '/data_train.pkl')
-    data_val.sort_index().to_pickle(out_directory + '/data_val.pkl')
-    data_test.sort_index().to_pickle(out_directory + '/data_test.pkl')
-    target_train.sort_index().to_pickle(out_directory + '/target_train.pkl')
-    target_val.sort_index().to_pickle(out_directory + '/target_val.pkl')
-    target_test.sort_index().to_pickle(out_directory + '/target_test.pkl')
+    data_train.sort_index().to_pickle(out_directory + '/patients_train.pkl')
+    data_val.sort_index().to_pickle(out_directory + '/patients_val.pkl')
+    data_test.sort_index().to_pickle(out_directory + '/patients_test.pkl')
+    target_train.sort_index().to_pickle(out_directory + '/outcomes_train.pkl')
+    target_val.sort_index().to_pickle(out_directory + '/outcomes_val.pkl')
+    target_test.sort_index().to_pickle(out_directory + '/outcomes_test.pkl')
 
     # pickled dictionary of string lookup table for medical codes
     dictionary = {0: "medical_code_zero", 1: "medical_code_one"}
