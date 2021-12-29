@@ -4,8 +4,11 @@ This script:
 1. Preprocesses data for sequence-to-sequence training as opposed to Daniel's
     script, which prepares data for sequence-to-timestep training. The data
     is sequentialized in the same way as Daniel's script.
-2. Instantiates the attention LSTM from Daniel's paper
-3. Trains the model
+2. Instantiates the attention LSTM from Daniel's paper.
+3. Trains the model using a seq2seq method.
+4. Uses the model to complete some probe sequences generated from test data.
+5. Performs some analysis specific to interact6 to quantify the quality of the
+    model's reconstruction of probe sequences.
 """
 
 
@@ -83,7 +86,7 @@ def offset_medical_codes(patients, dictionary, offset):
         return patients_offset, dictionary_offset
 
 
-def sequentialize_naive(patients, outcomes, dictionary):
+def visits_to_seq_naive(patients, outcomes, dictionary):
     """
     Unnests patients into a flat sequences, and applies outcomes as medical codes.
     Does so in a manner which loses separation between visits.
@@ -124,7 +127,7 @@ def sequentialize_naive(patients, outcomes, dictionary):
     return patients_seq, dictionary_offset
 
 
-def pad_to_max_length(patients_seq, max_length):
+def pad_to_length(patients_seq, max_length):
     """
     Pads the input patient sequences to a length of max_length.
     Generates the appropriate corresponding masks.
@@ -155,7 +158,7 @@ def mask_initial_n(masks, initial_n):
 
     Arguments:
     masks: ndarray of shape (n_patients, max_length) containing boolean mask values (False = mask)
-    initial_n: number of codes to mask per patient
+    initial_n: number of initial codes to mask per patient
 
     Returns:
     masks: ndarray of shape (n_patients, max_length) containing int mask values (0 = masked, 1 = unmasked)
@@ -187,6 +190,8 @@ def extract_xy_seq2seq(patients_padded, masks):
 def masked_sparse_categorical_crossentropy(y_true_and_mask, y_pred):
     """
     A masked version of keras.losses.sparse_categorical_crossentropy.
+    This is used instead of the sample_weights exposed by keras's API because
+    of bugs and inconsistent behavior in this version of keras.
 
     Arguments:
     y_true_and_mask: tensor of shape (batch_size, timesteps, 2) containing [y_true, y_mask]
@@ -205,6 +210,8 @@ def masked_sparse_categorical_crossentropy(y_true_and_mask, y_pred):
 class MaskedSparseCategoricalAccuracy(k.metrics.Metric):
     """
     A masked version of keras.metrics.SparseCategoricalAccuracy.
+    This is used instead of the sample_weights exposed by keras's API because
+    of bugs and inconsistent behavior in this version of keras.
 
     Arguments:
     y_true_and_mask: tensor of shape (batch_size, timesteps, 2) containing [y_true, y_mask]
@@ -234,12 +241,117 @@ class MaskedSparseCategoricalAccuracy(k.metrics.Metric):
         self.n_correct.assign(tf.zeros(shape=(), dtype=tf.float32))
 
 
+def seq_to_visits_naive(predicted_seqs):
+    """
+    Restructures flat medical code sequences into lists of visits.
+    Additionally undoes the medical code offset from visits_to_seq_naive.
+
+    Arguments:
+    predicted_seqs: ndarray of shape (n_patients, max_length)
+
+    Returns:
+    patients: list of patients; each is a list of visits; each is a list of medical codes
+    outcomes: list of patient outcomes
+    """
+    outcome_codes = {1, 2}
+    patients = []
+    outcomes = []
+    for predicted_seq in predicted_seqs:
+        patient = []
+        visit = []
+        outcome = None
+        for code in predicted_seq:
+            if code in outcome_codes:
+                outcome = True if code == 2 else False
+                break
+            elif (len(visit) == 0) or (code > visit[-1] + 3):
+                visit.append(int(code - 3))
+            else:
+                patient.append(visit)
+                visit = [int(code - 3)]
+        if len(visit) > 0:
+            patient.append(visit)
+        patients.append(patient)
+        outcomes.append(outcome)
+    return patients, outcomes
+
+
+def visits_to_multihot(patients, n_codes):
+    """
+    Restructures list-of-visits patient data format to multihot ndarray format.
+
+    Arguments:
+    patients: list of patients; each is a list of visits; each is a list of medical codes
+    n_codes: number of medical codes to expect
+
+    Returns:
+    patients_multihot: ndarray of size (n_patients, n_visits, n_codes)
+    """
+    max_n_visits = max([len(visits) for visits in patients])
+    patients_multihot = np.zeros(shape=(len(patients), max_n_visits, n_codes), dtype=int)
+    for patient_index, patient in enumerate(patients):
+        for visit_index, visit in enumerate(patient):
+            for code in visit:
+                patients_multihot[patient_index, visit_index, code] = 1
+    return patients_multihot
+
+
+def analyze_run_length(patients, periods, n_codes):
+    """
+    Quantifies the deviation from expected interact6 data.
+
+    Arguments:
+    patients: list of patients; each is a list of visits; each is a list of medical codes
+    periods: list of expected periods for each medical code
+    n_codes: number of medical codes to expect
+    initial_n: number of initial codes to mask
+
+    Returns:
+    rms_deviations: RMS of deviations from expected run lengths
+    """
+
+    # Convert patient visits to multihot per visit
+    patients_multihot = visits_to_multihot(patients, n_codes)
+
+    # Count run lengths, and mask the first and last runs with zeros. Example:
+    # patients_multihot[0, :, 0] = [1, 1, 1, 0, 0, 0, 0, 1, 1, 0, 1, 0, 0, 0]
+    #       run_lengths[0, :, 0] = [0, 0, 0, 4, 4, 4, 4, 2, 2, 1, 1, 0, 0, 0]
+    run_bounds_bool = patients_multihot[:, 1:] != patients_multihot[:, :-1]
+    run_lengths = np.zeros_like(patients_multihot)
+    for patient_index in range(len(patients)):
+        for code_index in range(n_codes):
+            patient_code_run_bounds_indices = np.concatenate([
+                [-1],
+                np.where(run_bounds_bool[patient_index, :, code_index])[0]])
+            patient_code_run_lengths = patient_code_run_bounds_indices[1:] - patient_code_run_bounds_indices[:-1]
+            patient_code_run_lengths_rep = np.repeat(patient_code_run_lengths, patient_code_run_lengths)
+            run_lengths[patient_index, :len(patient_code_run_lengths_rep), code_index] = patient_code_run_lengths_rep
+            run_lengths[patient_index, :patient_code_run_lengths_rep[0], code_index] = 0
+
+    # for sanity check
+    # print(patients_multihot[0])
+    # print(run_lengths[0])
+
+    # Compute masked average deviation from expected run_lengths
+    for period in periods:
+        assert period % 2 == 0  # too lazy to deal with odd periods
+    expected_run_lengths = [period // 2 for period in periods]
+    expected_run_lengths = np.array(expected_run_lengths)
+    expected_run_lengths = expected_run_lengths.reshape((1, 1, -1))
+    squared_deviations = np.square(run_lengths - expected_run_lengths)
+    mask = (run_lengths != 0).astype(int)
+    rms_deviations = np.sqrt(np.sum(squared_deviations * mask, axis=(0, 1)) / np.sum(mask, axis=(0, 1)))
+    return rms_deviations
+
+
 def main(
         *,
         path_patients_train, 
         path_outcomes_train, 
         path_patients_val, 
         path_outcomes_val,
+        path_patients_test,
+        path_outcomes_test,
         path_dictionary,
         path_output,
         max_length,
@@ -248,32 +360,55 @@ def main(
         attention_lstm_size,
         predictor_lstm_size,
         epochs, 
-        batch_size):
+        batch_size,
+        verbose):
     
-    # Load data and dictionary
+    # Load data, and dictionary
     patients_train, outcomes_train = read_data(path_patients_train, path_outcomes_train)
     patients_val, outcomes_val = read_data(path_patients_val, path_outcomes_val)
+    patients_test, outcomes_test = read_data(path_patients_test, path_outcomes_test)
     dictionary = read_dictionary(path_dictionary)
 
+    # Count number of medical codes before modifying dictionary
+    n_codes_original = len(dictionary)
+
     # Preprocess data
-    patients_seq_train, dictionary = sequentialize_naive(patients_train, outcomes_train, dictionary)
-    patients_seq_val, _ = sequentialize_naive(patients_val, outcomes_val, None)
-    patients_padded_train, masks_train = pad_to_max_length(patients_seq_train, max_length)
-    patients_padded_val, masks_val = pad_to_max_length(patients_seq_val, max_length)
+    patients_seq_train, dictionary = visits_to_seq_naive(patients_train, outcomes_train, dictionary)
+    patients_seq_val, _ = visits_to_seq_naive(patients_val, outcomes_val, None)
+    patients_seq_test, _ = visits_to_seq_naive(patients_test, outcomes_test, None)
+    if verbose >= 1:
+        max_length_in_data = max(
+            [len(s) for s in patients_seq_train]
+            + [len(s) for s in patients_seq_val]
+            + [len(s) for s in patients_seq_test])
+        min_length_in_data = min(
+            [len(s) for s in patients_seq_train]
+            + [len(s) for s in patients_seq_val]
+            + [len(s) for s in patients_seq_test])
+        print(f"Maximum sequentialized length in all data: {max_length_in_data}.")
+        print(f"Minimum sequentialized length in all data: {min_length_in_data}.")
+        print(f"Training data contains {len(patients_seq_train)} sequences.")
+        print(f"Validation data contains {len(patients_seq_val)} sequences.")
+        print(f"Test data contains {len(patients_seq_test)} sequences.")
+    patients_padded_train, masks_train = pad_to_length(patients_seq_train, max_length)
+    patients_padded_val, masks_val = pad_to_length(patients_seq_val, max_length)
+    patients_padded_test, masks_test = pad_to_length(patients_seq_test, max_length)
     masks_train = mask_initial_n(masks_train, probe_length)
     masks_val = mask_initial_n(masks_val, probe_length)
+    masks_test = mask_initial_n(masks_train, probe_length)
     x_train, y_train, y_mask_train = extract_xy_seq2seq(patients_padded_train, masks_train)
     x_val, y_val, y_mask_val = extract_xy_seq2seq(patients_padded_val, masks_val)
+    x_test, y_test, y_mask_test = extract_xy_seq2seq(patients_padded_test, masks_test)
 
     # Count number of medical codes after modifying dictionary
-    n_codes = len(dictionary)
+    n_codes_augmented = len(dictionary)
 
     # Determine length of input
     input_length = max_length - 1
 
     # Create model
     input_layer = k.layers.Input((input_length,), name='time_input')
-    embedding = k.layers.Embedding(input_dim=n_codes, output_dim=embed_size)(input_layer)
+    embedding = k.layers.Embedding(input_dim=n_codes_augmented, output_dim=embed_size)(input_layer)
     activations = k.layers.LSTM(
         attention_lstm_size, input_shape=(input_length, embed_size), return_sequences=True)(embedding)
     attention = k.layers.Dense(1, activation='tanh')(activations)
@@ -284,31 +419,10 @@ def main(
     sent_representation = k.layers.Multiply()([attention, embedding])
     attention_activations = k.layers.LSTM(
         predictor_lstm_size, input_shape=(input_length, embed_size), return_sequences=True)(sent_representation)
-    predictions = k.layers.Dense(n_codes, activation='softmax')(attention_activations)
+    predictions = k.layers.Dense(n_codes_augmented, activation='softmax')(attention_activations)
     model = k.models.Model(input=input_layer, output=predictions)
 
     # Compile and train model
-    '''
-    # Workaround for sparse loss functions and metrics in old tf/keras version
-    # https://github.com/tensorflow/tensorflow/issues/17150
-    # Note that this is only needed when using built-in sparse loss fns
-    y_train = np.expand_dims(y_train, axis=-1)
-    y_val = np.expand_dims(y_val, axis=-1)
-    model.compile(
-        # loss=masked_sparse_categorical_crossentropy,
-        loss=k.losses.SparseCategoricalCrossentropy(),
-        optimizer=k.optimizers.RMSprop(lr=0.01),  # TODO why not adam?,
-        sample_weight_mode="temporal")
-    model.fit(
-        x=x_train, y=y_train, sample_weight=y_mask_train,
-        validation_data=(x_val, y_val, y_mask_val),
-        batch_size=batch_size,
-        epochs=epochs,
-        callbacks=[
-            k.callbacks.ModelCheckpoint(filepath=path_output + '/weight-{epoch:02d}.h5'),
-            k.callbacks.CSVLogger(filename=path_output + '/logs.csv')])
-    '''
-
     model.compile(
         # loss=masked_sparse_categorical_crossentropy,
         loss=masked_sparse_categorical_crossentropy,
@@ -321,7 +435,42 @@ def main(
         epochs=epochs,
         callbacks=[
             k.callbacks.ModelCheckpoint(filepath=path_output + '/weight-{epoch:02d}.h5'),
+            k.callbacks.ModelCheckpoint(
+                filepath=path_output + '/weight-best.h5',
+                monitor='val_acc',
+                verbose=1,
+                save_best_only=True,
+                mode='max'),
             k.callbacks.CSVLogger(filename=path_output + '/logs.csv')])
+
+    # Reload the best weights
+    model.load_weights(path_output + '/weight-best.h5')
+
+    # Reconstruct sequences data from probe sequences derived from test data
+    probe_seqs = x_test[:, :probe_length]
+    probe_seqs, _ = pad_to_length(probe_seqs, input_length)
+    assert len(probe_seqs) % batch_size == 0  # too lazy to deal with partial batches rn
+    probe_seq_batches = np.split(probe_seqs, int(len(probe_seqs) / batch_size), axis=0)
+    predicted_seq_batches = []
+    for probe_seq_batch in probe_seq_batches:
+        for timestep in range(probe_length, input_length+1):
+            pred_onehot_batch = model.predict(probe_seq_batch, verbose=0)
+            pred_onehot_batch[:, :, 0] = np.NINF  # don't predict padding
+            pred_indices_batch = np.argmax(pred_onehot_batch, axis=-1)
+            if timestep != input_length:
+                probe_seq_batch[:, timestep] = pred_indices_batch[:, timestep-1]
+            else:
+                predicted_seq_batches.append(
+                    np.concatenate([probe_seq_batch, pred_indices_batch[:, timestep-1:timestep]], axis=1))
+    predicted_seqs = np.concatenate(predicted_seq_batches, axis=0)
+
+    # Group predictions into visits
+    predicted_patients, _ = seq_to_visits_naive(predicted_seqs)
+
+    # Analyze run lengths in predictions
+    rms_deviations = analyze_run_length(
+        patients=predicted_patients, periods=[4, 6, 10, 14], n_codes=n_codes_original)
+    print(rms_deviations)
 
 
 def parse_arguments():
@@ -332,6 +481,8 @@ def parse_arguments():
     parser.add_argument('--path_outcomes_train', type=str, required=True)
     parser.add_argument('--path_patients_val', type=str, required=True)
     parser.add_argument('--path_outcomes_val', type=str, required=True)
+    parser.add_argument('--path_patients_test', type=str, required=True)
+    parser.add_argument('--path_outcomes_test', type=str, required=True)
     parser.add_argument('--path_dictionary', type=str, required=True)
     parser.add_argument('--path_output', type=str, required=True)
 
@@ -345,6 +496,8 @@ def parse_arguments():
     parser.add_argument('--epochs', type=int, required=True)
     parser.add_argument('--batch_size', type=int, required=True)
 
+    parser.add_argument('--verbose', type=int, default=0)
+
     args = parser.parse_args()
     return args
 
@@ -357,6 +510,8 @@ if __name__ == '__main__':
         path_outcomes_train=args.path_outcomes_train,
         path_patients_val=args.path_patients_val,
         path_outcomes_val=args.path_outcomes_val,
+        path_patients_test=args.path_patients_test,
+        path_outcomes_test=args.path_outcomes_test,
         path_dictionary=args.path_dictionary,
         path_output=args.path_output,
 
@@ -368,4 +523,6 @@ if __name__ == '__main__':
         predictor_lstm_size=args.predictor_lstm_size,
 
         epochs=args.epochs,
-        batch_size=args.batch_size)
+        batch_size=args.batch_size,
+
+        verbose=args.verbose)
