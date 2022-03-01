@@ -3,7 +3,7 @@ This script:
 
 1. Preprocesses data for sequence-to-sequence training as opposed to Daniel's
     script, which prepares data for sequence-to-timestep training. The data
-    is sequentialized in the same way as Daniel's script.
+    is sequentialized by separating visits with an epsilon token.
 2. Instantiates the attention LSTM from Daniel's paper.
 3. Trains the model using a seq2seq method.
 4. Uses the model to complete some probe sequences generated from test data.
@@ -86,10 +86,10 @@ def offset_medical_codes(patients, dictionary, offset):
         return patients_offset, dictionary_offset
 
 
-def visits_to_seq_naive(patients, outcomes, dictionary):
+def visits_to_seq_epsilon(patients, outcomes, dictionary):
     """
     Unnests patients into a flat sequences, and applies outcomes as medical codes.
-    Does so in a manner which loses separation between visits.
+    Does so by separating visits with an epsilon token.
     Does NOT pad or take subsequences.
 
     Arguments:
@@ -102,13 +102,14 @@ def visits_to_seq_naive(patients, outcomes, dictionary):
     dictionary_offset: dictionary of offset medical code definitions, if input dictionary was provided
     """
 
-    # Offset all medical codes by 3 (0 = pad, 1 = survival, 2 = mortality)
-    patients_offset, dictionary_offset = offset_medical_codes(patients, dictionary, offset=3)
+    # Offset all medical codes (0 = pad, 1 = survival, 2 = mortality, 3 = epsilon)
+    patients_offset, dictionary_offset = offset_medical_codes(patients, dictionary, offset=4)
     if dictionary is not None:
         dictionary_offset.update({
             0: "padding",
             1: "outcome_survival",
-            2: "outcome_mortality"
+            2: "outcome_mortality",
+            3: "epsilon"
         })
 
     # Flatten each patient into a sequence
@@ -117,6 +118,7 @@ def visits_to_seq_naive(patients, outcomes, dictionary):
         patient_seq = []
         for visit in patient:
             patient_seq.extend(visit)
+            patient_seq.append(3)
         patients_seq.append(patient_seq)
 
     # Append outcomes as medical codes
@@ -240,10 +242,10 @@ class MaskedSparseCategoricalAccuracy(k.metrics.Metric):
         self.n_correct.assign(tf.zeros(shape=(), dtype=tf.float32))
 
 
-def seq_to_visits_naive(predicted_seqs):
+def seq_to_visits_epsilon(predicted_seqs):
     """
     Restructures flat medical code sequences into lists of visits.
-    Additionally undoes the medical code offset from visits_to_seq_naive.
+    Additionally undoes the medical code offset from visits_to_seq_epsilon.
 
     Arguments:
     predicted_seqs: ndarray of shape (n_patients, max_length)
@@ -253,6 +255,7 @@ def seq_to_visits_naive(predicted_seqs):
     outcomes: list of patient outcomes
     """
     outcome_codes = {1, 2}
+    epsilon_code = 3
     patients = []
     outcomes = []
     for predicted_seq in predicted_seqs:
@@ -263,11 +266,11 @@ def seq_to_visits_naive(predicted_seqs):
             if code in outcome_codes:
                 outcome = True if code == 2 else False
                 break
-            elif (len(visit) == 0) or (code > visit[-1] + 3):
-                visit.append(int(code - 3))
-            else:
+            elif code == epsilon_code:
                 patient.append(visit)
-                visit = [int(code - 3)]  # undo offset
+                visit = []
+            else:
+                visit.append(int(code - 4))  # undo offset
         if len(visit) > 0:
             patient.append(visit)
         patients.append(patient)
@@ -328,8 +331,8 @@ def analyze_run_length(patients, periods, n_codes):
             run_lengths[patient_index, :patient_code_run_lengths_rep[0], code_index] = 0
 
     # for sanity check
-    # print(patients_multihot[0])
-    # print(run_lengths[0])
+    print(patients_multihot[0])
+    print(run_lengths[0])
 
     # Compute masked average deviation from expected run_lengths
     for period in periods:
@@ -372,9 +375,9 @@ def main(
     n_codes_original = len(dictionary)
 
     # Preprocess data
-    patients_seq_train, dictionary = visits_to_seq_naive(patients_train, outcomes_train, dictionary)
-    patients_seq_val, _ = visits_to_seq_naive(patients_val, outcomes_val, None)
-    patients_seq_test, _ = visits_to_seq_naive(patients_test, outcomes_test, None)
+    patients_seq_train, dictionary = visits_to_seq_epsilon(patients_train, outcomes_train, dictionary)
+    patients_seq_val, _ = visits_to_seq_epsilon(patients_val, outcomes_val, None)
+    patients_seq_test, _ = visits_to_seq_epsilon(patients_test, outcomes_test, None)
     if verbose >= 1:
         max_length_in_data = max(
             [len(s) for s in patients_seq_train]
@@ -421,8 +424,8 @@ def main(
     predictions = k.layers.Dense(n_codes_augmented, activation='softmax')(attention_activations)
     model = k.models.Model(input=input_layer, output=predictions)
 
-    """
     # Compile and train model
+    """
     model.compile(
         # loss=masked_sparse_categorical_crossentropy,
         loss=masked_sparse_categorical_crossentropy,
@@ -466,7 +469,9 @@ def main(
     predicted_seqs = np.concatenate(predicted_seq_batches, axis=0)
 
     # Group predictions into visits
-    predicted_patients, _ = seq_to_visits_naive(predicted_seqs)
+    predicted_patients, _ = seq_to_visits_epsilon(predicted_seqs)
+
+    print(predicted_patients[0])
 
     # Analyze run lengths in predictions
     rms_deviations = analyze_run_length(

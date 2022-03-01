@@ -3,8 +3,12 @@ This script:
 
 1. Preprocesses data for sequence-to-sequence training as opposed to Daniel's
     script, which prepares data for sequence-to-timestep training. The data
-    is sequentialized in the same way as Daniel's script.
-2. Instantiates the attention LSTM from Daniel's paper.
+    is sequentialized by encoding each visit as a multi-hot vector.
+2. Instantiates a variant of the attention LSTM from Daniel's paper. This
+    variant accepts multi-hot vectors representing what medical codes were
+    administered during each visit, embeds them by summing learned embeddings
+    for each medical code, and predicts the codes preset in the next visit
+    through a binary classification for each code.
 3. Trains the model using a seq2seq method.
 4. Uses the model to complete some probe sequences generated from test data.
 5. Performs some analysis specific to interact6 to quantify the quality of the
@@ -12,11 +16,10 @@ This script:
 """
 
 
-
 import argparse
 import pickle
 
-import keras as k
+# import keras as k
 import numpy as np
 import pandas as pd
 import tensorflow as tf
@@ -86,11 +89,10 @@ def offset_medical_codes(patients, dictionary, offset):
         return patients_offset, dictionary_offset
 
 
-def visits_to_seq_naive(patients, outcomes, dictionary):
+def visits_to_seq_multihot(patients, outcomes, dictionary):
     """
-    Unnests patients into a flat sequences, and applies outcomes as medical codes.
-    Does so in a manner which loses separation between visits.
-    Does NOT pad or take subsequences.
+    Converts list-of-visits patient data into a list of multi-hot ndarrays.
+    Does not pad or take subsequences.
 
     Arguments:
     patients: list of patients; each is a list of visits; each is a list of medical codes
@@ -98,30 +100,30 @@ def visits_to_seq_naive(patients, outcomes, dictionary):
     dictionary (optional): dictionary of medical code definitions, or None
 
     Returns:
-    patients_seq: list of patients; each is a list of medical codes including outcome codes
+    patients_seq: list of patients; each is an ndarray of shape (n_visits + 1, n_codes)
     dictionary_offset: dictionary of offset medical code definitions, if input dictionary was provided
     """
 
-    # Offset all medical codes by 3 (0 = pad, 1 = survival, 2 = mortality)
-    patients_offset, dictionary_offset = offset_medical_codes(patients, dictionary, offset=3)
+    # Offset all medical codes (0 = survival, 1 = mortality)
+    patients_offset, dictionary_offset = offset_medical_codes(patients, dictionary, offset=2)
     if dictionary is not None:
         dictionary_offset.update({
-            0: "padding",
-            1: "outcome_survival",
-            2: "outcome_mortality"
+            0: "outcome_survival",
+            1: "outcome_mortality",
         })
 
     # Flatten each patient into a sequence
     patients_seq = []
     for patient in patients_offset:
-        patient_seq = []
-        for visit in patient:
-            patient_seq.extend(visit)
+        patient_seq = np.zeros(shape=(len(patient) + 1, len(dictionary_offset)), dtype=int)
+        for visit_index, visit in enumerate(patient):
+            for code in visit:
+                patient_seq[visit_index, code] = 1
         patients_seq.append(patient_seq)
 
     # Append outcomes as medical codes
     for patient_seq, mortality in zip(patients_seq, outcomes):
-        patient_seq.append(2 if mortality else 1)
+        patient_seq[-1, 1 if mortality else 0] = 1
 
     # Return
     return patients_seq, dictionary_offset
@@ -134,19 +136,19 @@ def pad_to_length(patients_seq, max_length):
     Outputs numpy arrays.
 
     Arguments:
-    patients_seq: list of patients; each is a list of medical codes including outcome codes
+    patients_seq: list of patients; each is an ndarray of shape (n_visits + 1, n_codes)
     max_length: integer length, must be no less than length of longest list in patients_seq
 
     Returns:
-    patients_padded: ndarray of shape (n_patients, max_length) containing padded patients_seq data
+    patients_padded: ndarray of shape (n_patients, max_length, n_codes) containing padded patients_seq data
     masks: ndarray of shape (n_patients, max_length) containing int mask values (0 = masked, 1 = unmasked)
     """
-    patients_padded = np.zeros(shape=(len(patients_seq), max_length), dtype=float)
-    masks = np.zeros_like(patients_padded, dtype=float)
+    patients_padded = np.zeros(shape=(len(patients_seq), max_length, patients_seq[0].shape[1]), dtype=float)
+    masks = np.zeros(shape=(len(patients_seq), max_length), dtype=float)
     for patient_index, patient_seq in enumerate(patients_seq):
         amount_to_pad = max_length - len(patient_seq)
         assert amount_to_pad >= 0
-        patients_padded[patient_index, :len(patient_seq)] = patient_seq
+        patients_padded[patient_index, :len(patient_seq), :] = patient_seq
         masks[patient_index, :len(patient_seq)] = 1
     return patients_padded, masks
 
@@ -173,64 +175,110 @@ def extract_xy_seq2seq(patients_padded, masks):
     Extracts (x, y) pairs for sequence-to-sequence training.
 
     Arguments:
-    patients_padded: ndarray of shape (n_patients, max_length) containing padded patients_seq data
+    patients_padded: ndarray of shape (n_patients, max_length, n_codes) containing padded patients_seq data
     masks: ndarray of shape (n_patients, max_length) containing int mask values (0 = masked, 1 = unmasked)
 
     Returns:
-    x: ndarray of shape (n_patients, max_length-1), containing input sequences
-    y: ndarray of shape (n_patients, max_length-1), containing target sequences offset by 1 from x
+    x: ndarray of shape (n_patients, max_length-1, n_codes), containing input sequences
+    y: ndarray of shape (n_patients, max_length-1, n_codes), containing target sequences offset by 1 from x
     y_mask: ndarray of shape(n_patients, max_length-1), containing int masks for y (0 = masked, 1 = unmasked)
     """
-    x = patients_padded[:, :-1]
-    y = patients_padded[:, 1:]
-    y_mask = masks[:, 1:]
+    x = patients_padded[:, :-1, :].astype(np.float32)
+    y = patients_padded[:, 1:, :].astype(np.float32)
+    y_mask = masks[:, 1:].astype(np.float32)
     return x, y, y_mask
 
 
-def masked_sparse_categorical_crossentropy(y_true_and_mask, y_pred):
+class EmbeddingSum(tf.keras.layers.Layer):
     """
-    A masked version of keras.losses.sparse_categorical_crossentropy.
+    Takes in multi-hot categorical vector inputs.
+    Each category corresponds to a trainable embedding in this layer.
+    Outputs the sum of the embeddings "selected" by the multi-hot input.
+
+    Arguments:
+    input: tensor of shape (batch_size, timesteps, input_dim)
+
+    Returns:
+    output: tensor of shape (batch_size, timesteps, output_dim)
+    """
+
+    def __init__(self, embed_size, **kwargs):
+        super().__init__(**kwargs)
+        self.embed_size = embed_size
+        self.timesteps = None
+        self.n_codes = None
+        self.embedding_matrix = None
+
+    def get_config(self):
+        return {"embed_size": self.embed_size}
+
+    def build(self, input_shape):
+        _, self.timesteps, self.n_codes = input_shape
+        self.embedding_matrix = self.add_weight(
+            shape=(self.n_codes, self.embed_size), initializer='random_normal', trainable=True)
+
+    def call(self, inputs, *args, **kwargs):
+        # print("inputs.shape:", inputs.shape)
+        batch_size = tf.shape(inputs)[0]
+        inputs_reshaped = tf.reshape(inputs, (batch_size * self.timesteps, self.n_codes))
+        # print("inputs_reshaped.shape", inputs_reshaped.shape)
+        output_reshaped = tf.linalg.matmul(
+            a=inputs_reshaped,
+            b=self.embedding_matrix,
+            # a_is_sparse=True,
+            # b_is_sparse=False,
+            name="embedding_matmul")
+        # print("output_reshaped.shape: ", output_reshaped)
+        output = tf.reshape(output_reshaped, (batch_size, self.timesteps, self.embed_size))
+        # print("output.shape: ", output.shape)
+        return output
+
+
+def masked_binary_crossentropy(y_true_and_mask, y_pred):
+    """
+    A masked version of keras.losses.binary_crossentropy.
     This is used instead of the sample_weights exposed by keras's API because
     of bugs and inconsistent behavior in this version of keras.
 
     Arguments:
-    y_true_and_mask: tensor of shape (batch_size, timesteps, 2) containing [y_true, y_mask]
+    y_true_and_mask: tensor of shape (batch_size, timesteps, num_classes+1) containing [y_true, y_mask]
     y_pred: tensor of shape (batch_size, timesteps, num_classes) predicted by the model
 
     Returns:
     losses_masked: tensor of shape (batch_size, timesteps), with masked losses zeroed out.
     """
-    y_true = y_true_and_mask[:, :, 0]
-    y_mask = y_true_and_mask[:, :, 1]
-    losses = k.losses.sparse_categorical_crossentropy(y_true, y_pred)
+    y_true = y_true_and_mask[:, :, :-1]
+    y_mask = y_true_and_mask[:, :, -1]
+    losses = tf.keras.losses.binary_crossentropy(y_true, y_pred)
     losses_masked = losses * y_mask
     return losses_masked
 
 
-class MaskedSparseCategoricalAccuracy(k.metrics.Metric):
+class MaskedBinaryAccuracy(tf.keras.metrics.Metric):
     """
-    A masked version of keras.metrics.SparseCategoricalAccuracy.
+    A masked version of keras.metrics.BinaryAccuracy.
     This is used instead of the sample_weights exposed by keras's API because
     of bugs and inconsistent behavior in this version of keras.
 
     Arguments:
-    y_true_and_mask: tensor of shape (batch_size, timesteps, 2) containing [y_true, y_mask]
+    y_true_and_mask: tensor of shape (batch_size, timesteps, num_classes+1) containing [y_true, y_mask]
     y_pred: tensor of shape (batch_size, timesteps, num_classes) predicted by the model
     """
 
-    def __init__(self, **kwargs):
+    def __init__(self, n_codes, **kwargs):
         super().__init__(**kwargs)
         self.n_total = tf.Variable(
             initial_value=tf.zeros(shape=(), dtype=tf.float32), trainable=False, name="n_total")
         self.n_correct = tf.Variable(
             initial_value=tf.zeros(shape=(), dtype=tf.float32), trainable=False, name="n_correct")
+        self.n_codes = tf.constant(value=n_codes, dtype=tf.float32, name="n_codes")
 
     def update_state(self, y_true_and_mask, y_pred, sample_weight=None):
-        y_true = y_true_and_mask[:, :, 0]
-        y_mask = y_true_and_mask[:, :, 1]
-        self.n_total = self.n_total.assign_add(tf.reduce_sum(y_mask))
+        y_true = y_true_and_mask[:, :, :-1]
+        y_mask = y_true_and_mask[:, :, -1]
+        self.n_total = self.n_total.assign_add(tf.reduce_sum(y_mask) * self.n_codes)
         self.n_correct = self.n_correct.assign_add(
-            tf.reduce_sum(k.metrics.sparse_categorical_accuracy(y_true, y_pred) * y_mask))
+            tf.reduce_sum(tf.cast(tf.keras.metrics.binary_accuracy(y_true, y_pred), dtype=tf.float32) * y_mask))
 
     def result(self):
         return self.n_correct / self.n_total
@@ -240,67 +288,12 @@ class MaskedSparseCategoricalAccuracy(k.metrics.Metric):
         self.n_correct.assign(tf.zeros(shape=(), dtype=tf.float32))
 
 
-def seq_to_visits_naive(predicted_seqs):
-    """
-    Restructures flat medical code sequences into lists of visits.
-    Additionally undoes the medical code offset from visits_to_seq_naive.
-
-    Arguments:
-    predicted_seqs: ndarray of shape (n_patients, max_length)
-
-    Returns:
-    patients: list of patients; each is a list of visits; each is a list of medical codes
-    outcomes: list of patient outcomes
-    """
-    outcome_codes = {1, 2}
-    patients = []
-    outcomes = []
-    for predicted_seq in predicted_seqs:
-        patient = []
-        visit = []
-        outcome = None
-        for code in predicted_seq:
-            if code in outcome_codes:
-                outcome = True if code == 2 else False
-                break
-            elif (len(visit) == 0) or (code > visit[-1] + 3):
-                visit.append(int(code - 3))
-            else:
-                patient.append(visit)
-                visit = [int(code - 3)]  # undo offset
-        if len(visit) > 0:
-            patient.append(visit)
-        patients.append(patient)
-        outcomes.append(outcome)
-    return patients, outcomes
-
-
-def visits_to_multihot(patients, n_codes):
-    """
-    Restructures list-of-visits patient data format to multihot ndarray format.
-
-    Arguments:
-    patients: list of patients; each is a list of visits; each is a list of medical codes
-    n_codes: number of medical codes to expect
-
-    Returns:
-    patients_multihot: ndarray of size (n_patients, n_visits, n_codes)
-    """
-    max_n_visits = max([len(visits) for visits in patients])
-    patients_multihot = np.zeros(shape=(len(patients), max_n_visits, n_codes), dtype=int)
-    for patient_index, patient in enumerate(patients):
-        for visit_index, visit in enumerate(patient):
-            for code in visit:
-                patients_multihot[patient_index, visit_index, code] = 1
-    return patients_multihot
-
-
-def analyze_run_length(patients, periods, n_codes):
+def analyze_run_length(patients_multihot, periods, n_codes):
     """
     Quantifies the deviation from expected interact6 data.
 
     Arguments:
-    patients: list of patients; each is a list of visits; each is a list of medical codes
+    patients: ndarray of shape (n_patients, max_length, n_codes) containing padded patients_seq data
     periods: list of expected periods for each medical code
     n_codes: number of medical codes to expect
     initial_n: number of initial codes to mask
@@ -309,15 +302,12 @@ def analyze_run_length(patients, periods, n_codes):
     rms_deviations: RMS of deviations from expected run lengths
     """
 
-    # Convert patient visits to multihot per visit
-    patients_multihot = visits_to_multihot(patients, n_codes)
-
     # Count run lengths, and mask the first and last runs with zeros. Example:
     # patients_multihot[0, :, 0] = [1, 1, 1, 0, 0, 0, 0, 1, 1, 0, 1, 0, 0, 0]
     #       run_lengths[0, :, 0] = [0, 0, 0, 4, 4, 4, 4, 2, 2, 1, 1, 0, 0, 0]
     run_bounds_bool = patients_multihot[:, 1:] != patients_multihot[:, :-1]
     run_lengths = np.zeros_like(patients_multihot)
-    for patient_index in range(len(patients)):
+    for patient_index in range(len(patients_multihot)):
         for code_index in range(n_codes):
             patient_code_run_bounds_indices = np.concatenate([
                 [-1],
@@ -328,8 +318,8 @@ def analyze_run_length(patients, periods, n_codes):
             run_lengths[patient_index, :patient_code_run_lengths_rep[0], code_index] = 0
 
     # for sanity check
-    # print(patients_multihot[0])
-    # print(run_lengths[0])
+    print(patients_multihot[0])
+    print(run_lengths[0])
 
     # Compute masked average deviation from expected run_lengths
     for period in periods:
@@ -372,9 +362,10 @@ def main(
     n_codes_original = len(dictionary)
 
     # Preprocess data
-    patients_seq_train, dictionary = visits_to_seq_naive(patients_train, outcomes_train, dictionary)
-    patients_seq_val, _ = visits_to_seq_naive(patients_val, outcomes_val, None)
-    patients_seq_test, _ = visits_to_seq_naive(patients_test, outcomes_test, None)
+    patients_seq_train, dictionary_offset = visits_to_seq_multihot(patients_train, outcomes_train, dictionary)
+    patients_seq_val, _ = visits_to_seq_multihot(patients_val, outcomes_val, dictionary)
+    patients_seq_test, _ = visits_to_seq_multihot(patients_test, outcomes_test, dictionary)
+    dictionary = dictionary_offset
     if verbose >= 1:
         max_length_in_data = max(
             [len(s) for s in patients_seq_train]
@@ -399,6 +390,9 @@ def main(
     x_val, y_val, y_mask_val = extract_xy_seq2seq(patients_padded_val, masks_val)
     x_test, y_test, y_mask_test = extract_xy_seq2seq(patients_padded_test, masks_test)
 
+    print(x_train[0])
+    print(x_train.shape)
+
     # Count number of medical codes after modifying dictionary
     n_codes_augmented = len(dictionary)
 
@@ -406,44 +400,54 @@ def main(
     input_length = max_length - 1
 
     # Create model
-    input_layer = k.layers.Input((input_length,), name='time_input')
-    embedding = k.layers.Embedding(input_dim=n_codes_augmented, output_dim=embed_size)(input_layer)
-    activations = k.layers.LSTM(
-        attention_lstm_size, input_shape=(input_length, embed_size), return_sequences=True)(embedding)
-    attention = k.layers.Dense(1, activation='tanh')(activations)
-    attention = k.layers.Flatten()(attention)
-    attention = k.layers.Activation('softmax')(attention)
-    attention = k.layers.RepeatVector(embed_size)(attention)
-    attention = k.layers.Permute([2, 1])(attention)
-    sent_representation = k.layers.Multiply()([attention, embedding])
-    attention_activations = k.layers.LSTM(
-        predictor_lstm_size, input_shape=(input_length, embed_size), return_sequences=True)(sent_representation)
-    predictions = k.layers.Dense(n_codes_augmented, activation='softmax')(attention_activations)
-    model = k.models.Model(input=input_layer, output=predictions)
+    # NOTE:
+    # Expect to see a warning that looks like this:
+    # Skipping optimization due to error while loading function libraries:
+    # Invalid argument: Functions '...' and '...' both implement '...'
+    # but their signatures do not match.
+    # This warning is erroneously issued, and can be safely ignored, as per
+    # https://github.com/tensorflow/tensorflow/issues/30263
+    input_layer = tf.keras.layers.Input((input_length, n_codes_augmented), name='time_input')
+    embedding = EmbeddingSum(embed_size=embed_size)(input_layer)
+    activations = tf.keras.layers.LSTM(
+        attention_lstm_size,
+        input_shape=(input_length, embed_size),
+        return_sequences=True)(embedding)
+    attention = tf.keras.layers.Dense(1, activation='tanh')(activations)
+    attention = tf.keras.layers.Flatten()(attention)
+    attention = tf.keras.layers.Activation('softmax')(attention)
+    attention = tf.keras.layers.RepeatVector(embed_size)(attention)
+    attention = tf.keras.layers.Permute([2, 1])(attention)
+    sent_representation = tf.keras.layers.Multiply()([attention, embedding])
+    attention_activations = tf.keras.layers.LSTM(
+        predictor_lstm_size,
+        input_shape=(input_length, embed_size),
+        return_sequences=True)(sent_representation)
+    predictions = tf.keras.layers.Dense(n_codes_augmented, activation='softmax')(attention_activations)
+    model = tf.keras.models.Model(inputs=input_layer, outputs=predictions)
 
-    """
     # Compile and train model
+    '''
     model.compile(
-        # loss=masked_sparse_categorical_crossentropy,
-        loss=masked_sparse_categorical_crossentropy,
-        metrics=[MaskedSparseCategoricalAccuracy(name="acc")],
-        optimizer=k.optimizers.RMSprop(lr=0.01))  # TODO why not adam?
+        loss=masked_binary_crossentropy,
+        metrics=[MaskedBinaryAccuracy(n_codes=n_codes_augmented, name="acc")],
+        optimizer=tf.keras.optimizers.Adam())
     model.fit(
-        x=x_train, y=np.stack([y_train, y_mask_train], axis=-1),
-        validation_data=(x_val, np.stack([y_val, y_mask_val], axis=-1)),
+        x=x_train, y=np.concatenate([y_train, y_mask_train[:, :, np.newaxis]], axis=-1),
+        validation_data=(x_val, np.concatenate([y_val, y_mask_val[:, :, np.newaxis]], axis=-1)),
         batch_size=batch_size,
         epochs=epochs,
         callbacks=[
-            k.callbacks.ModelCheckpoint(filepath=path_output + '/weight-{epoch:02d}.h5'),
-            k.callbacks.ModelCheckpoint(
+            tf.keras.callbacks.ModelCheckpoint(filepath=path_output + '/weight-{epoch:02d}.h5'),
+            tf.keras.callbacks.ModelCheckpoint(
                 filepath=path_output + '/weight-best.h5',
                 monitor='val_acc',
                 verbose=1,
                 save_best_only=True,
                 mode='max'),
-            k.callbacks.CSVLogger(filename=path_output + '/logs.csv')])
-    """
-
+            tf.keras.callbacks.CSVLogger(filename=path_output + '/logs.csv')],
+        verbose=1)
+    '''
     # Reload the best weights
     model.load_weights(path_output + '/weight-best.h5')
 
@@ -455,22 +459,21 @@ def main(
     predicted_seq_batches = []
     for probe_seq_batch in probe_seq_batches:
         for timestep in range(probe_length, input_length+1):
-            pred_onehot_batch = model.predict(probe_seq_batch, verbose=0)
-            pred_onehot_batch[:, :, 0] = np.NINF  # don't predict padding
-            pred_indices_batch = np.argmax(pred_onehot_batch, axis=-1)
+            pred_multihot_batch = model.predict(probe_seq_batch, verbose=0)
             if timestep != input_length:
-                probe_seq_batch[:, timestep] = pred_indices_batch[:, timestep-1]
+                probe_seq_batch[:, timestep] = np.around(pred_multihot_batch[:, timestep-1])
             else:
                 predicted_seq_batches.append(
-                    np.concatenate([probe_seq_batch, pred_indices_batch[:, timestep-1:timestep]], axis=1))
+                    np.concatenate([probe_seq_batch, np.around(pred_multihot_batch[:, timestep-1:timestep])], axis=1))
     predicted_seqs = np.concatenate(predicted_seq_batches, axis=0)
 
     # Group predictions into visits
-    predicted_patients, _ = seq_to_visits_naive(predicted_seqs)
+    predicted_patients = predicted_seqs[:, :, 2:]
+    print(predicted_patients[0])
 
     # Analyze run lengths in predictions
     rms_deviations = analyze_run_length(
-        patients=predicted_patients, periods=[4, 6, 10, 14], n_codes=n_codes_original)
+        patients_multihot=predicted_patients, periods=[4, 6, 10, 14], n_codes=n_codes_original)
     print(rms_deviations)
 
 
