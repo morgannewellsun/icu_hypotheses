@@ -45,7 +45,7 @@ def convert_to_3digit_icd9(dx_str):
             return dx_str
 
 
-def build_patient_maps(patients_filepath):
+def build_mimic_patient_maps(patients_filepath):
     patient_gender_map = {}
     patient_dob_map = {}
     patient_mortality_map = {}
@@ -60,7 +60,7 @@ def build_patient_maps(patients_filepath):
     return patient_gender_map, patient_dob_map, patient_mortality_map
 
 
-def build_admission_maps(admission_filepath):
+def build_mimic_admission_maps(admission_filepath):
     patient_admissions_unsorted_map = {}
     admission_datetime_map = {}
     with open(admission_filepath, 'r') as file:
@@ -82,7 +82,7 @@ def build_admission_maps(admission_filepath):
     return patient_admissions_map, admission_datetime_map
 
 
-def build_diagnoses_maps(diagnoses_filepath):
+def build_mimic_diagnoses_maps(diagnoses_filepath):
     admission_diagnoses_map = {}
     admission_diagnoses_trunc_map = {}
     with open(diagnoses_filepath, 'r') as file:
@@ -103,7 +103,7 @@ def build_diagnoses_maps(diagnoses_filepath):
     return admission_diagnoses_map, admission_diagnoses_trunc_map
 
 
-def build_procedures_maps(procedures_filepath):
+def build_mimic_procedures_maps(procedures_filepath):
     admission_procedures_map = {}
     admission_procedures_trunc_map = {}
     with open(procedures_filepath, 'r') as file:
@@ -124,12 +124,12 @@ def build_procedures_maps(procedures_filepath):
     return admission_procedures_map, admission_procedures_trunc_map
 
 
-def build_medications_maps(prescriptions_filepath):
+def build_mimic_prescriptions_maps(prescriptions_filepath):
     admission_medications_map = {}
     admission_medications_trunc_map = {}
     prescriptions_df = pd.read_csv(
         prescriptions_filepath, usecols=["HADM_ID", "STARTDATE", "ENDDATE", "NDC"], dtype={"NDC": str})
-    prescriptions_df = prescriptions_df[prescriptions_df["NDC"].str.len() == 11]  # 11-character NDC codes
+    prescriptions_df = prescriptions_df[prescriptions_df["NDC"].str.len() == 11]  # only keep 11-character NDC codes
     for admission_id, admission_df in prescriptions_df.groupby("HADM_ID", sort=False):
         admission_df = admission_df.sort_values("ENDDATE", kind="mergesort")  # stable sort not available for >1 key
         admission_df = admission_df.sort_values("STARTDATE", kind="mergesort")
@@ -152,11 +152,11 @@ def main(
     # build raw data maps
     # -------------------------------------------------------------------------
     print("[INFO] Building raw data maps")
-    patient_gender_map, patient_dob_map, patient_mortality_map = build_patient_maps(patients_filepath)
-    patient_admissions_map, admission_datetime_map = build_admission_maps(admissions_filepath)
-    admission_diagnoses_map, admission_diagnoses_trunc_map = build_diagnoses_maps(diagnoses_filepath)
-    admission_procedures_map, admission_procedures_trunc_map = build_procedures_maps(procedures_filepath)
-    admission_medications_map, admission_medications_trunc_map = build_medications_maps(prescriptions_filepath)
+    patient_gender_map, patient_dob_map, patient_mortality_map = build_mimic_patient_maps(patients_filepath)
+    patient_admissions_map, admission_datetime_map = build_mimic_admission_maps(admissions_filepath)
+    admission_diagnoses_map, admission_diagnoses_trunc_map = build_mimic_diagnoses_maps(diagnoses_filepath)
+    admission_procedures_map, admission_procedures_trunc_map = build_mimic_procedures_maps(procedures_filepath)
+    admission_medications_map, admission_medications_trunc_map = build_mimic_prescriptions_maps(prescriptions_filepath)
 
     # -------------------------------------------------------------------------
     # construct event-per-row dataframe
