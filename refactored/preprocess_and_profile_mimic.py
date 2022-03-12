@@ -1,12 +1,47 @@
 
-# Outputs ne dataframe (saved as CSV), where each row represets a medical event
-# - diagnosis, procedure, or medication prescription. Each type of event -
-# diagnoses, procedures, and medications - is chronologically sorted w.r.t
-# other events of the same type. However, there is no information regarding
-# the relative order of these events. For example, it is possible to determine
-# that procedure B was done after procedure A. But we do not know if procedure
-# B was done before or after diagnosis C.
+"""
+This script preprocesses and profiles the MIMIC-III dataset in a general way.
+It does not directly prepare the data for any specific model or algorithm.
+Instead, it just converts the raw MIMIC-III tables to a more convenient form.
+Further processing will be required for any specific model or algorithm to ingest the data.
 
+MIMIC-III data preprocessing:
+    This script preprocesses MIMIC-III data by joining multiple tables together.
+    The preprocessing extracts patients, admissions, and medical events.
+    Each patient has demographic and mortality outcome information.
+    Each patient also contains a chronologically ordered sequence of admissions.
+    Each admission contains three sets of medical events: diagnoses, procedures, and medication prescriptions.
+        Diagnoses and procedures are represented using ICD-9 codes.
+        Medication prescriptions are represented using 11-digit NDC codes.
+    Each of these three sets is internally chronologically ordered (i.e. the order of events during the admission).
+    However, MIMIC-III does not give enough information to chronologically compare events of different types.
+    E.g., if a given admission contains prescription P and diagnosis D, one cannot tell in which order they occured.
+    This is a limitation of the MIMIC-III dataset and not of this preprocessing script.
+
+Additional features:
+    For each patient, the number of admissions, events, diagnoses, procedures, and medications is counted.
+        This can be used to filter out patients with insufficient history.
+    For each admission, the number of events, diagnoses, procedures, and medications is counted.
+    For each admission, the days since the previous admission is computed.
+    Truncated versions of the ICD-9/NDC codes are constructed to reduce the number of event classes.
+    For both untruncated and truncated ICD-9/NDC codes, the number of occurences in the entire dataset is counted.
+        This can be used to filter out rare events.
+
+Output:
+    The output CSV file contains processed data in the form of one event per row.
+        The event type is represented by 'D' for diagnoses, 'P' for procedures, and 'M' for medication prescriptions.
+        These letters are also appended to the untruncated and truncated ICD-9/NDC codes to ensure uniqueness.
+    Patient/admission-level features are repeated over many rows, since each patient/admission contains many events.
+        This isn't the most space-efficient method of storing the processed data, but is convenient to use.
+    Inspect the file for more details.
+
+Profiling:
+    This script outputs a number of plots to help with using the data.
+    cumulative_event_count...
+        These plots are intended to aid in deciding the number of rare event classes to remove from the dataset.
+    cumulative_patient_count...
+        These plots are intended to aid in deciding how to filter patients based on number of admissions/events.
+"""
 
 import argparse
 from datetime import datetime
@@ -347,17 +382,25 @@ def main(
         ("procedures_trunc", event_counts_procedures_trunc),
         ("medications_trunc", event_counts_medications_trunc),
     ]:
-        cumulative_event_distribution = np.cumsum(sorted(event_counts, reverse=True))
+        event_counts_sorted = sorted(event_counts, reverse=True)
+        cumulative_event_distribution = np.cumsum(event_counts_sorted)
         cumulative_event_distribution = cumulative_event_distribution / cumulative_event_distribution[-1]
         plt.figure(figsize=(20, 10))
         plt.plot(range(1, len(cumulative_event_distribution) + 1), cumulative_event_distribution)
         plt.xlim((1, len(cumulative_event_distribution) + 1))
         plt.ylim((0, 1))
         thresholds = [0.5, 0.8, 0.9, 0.95, 0.99]
-        plt.xticks(np.searchsorted(cumulative_event_distribution, thresholds) + 1)
+        threshold_n_codes_used = np.searchsorted(cumulative_event_distribution, thresholds) + 1
+        threshold_event_counts = [event_counts_sorted[int(i-1)] for i in threshold_n_codes_used]
+        plt.xticks(
+            ticks=threshold_n_codes_used,
+            labels=[
+                f"{int(n_codes_used)} / {int(event_counts)}"
+                for n_codes_used, event_counts
+                in zip(threshold_n_codes_used, threshold_event_counts)])
         plt.yticks(thresholds)
         plt.grid(visible=True, which="major")
-        plt.xlabel("number of codes used")
+        plt.xlabel("number of codes used / event count incl. min. threshold to use")
         plt.ylabel("% of total event instances represented")
         title = f"cumulative_event_count_{name}"
         plt.title(title)
