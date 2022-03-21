@@ -75,7 +75,7 @@ def main(preprocessed_mimic_filepath, output_directory):
     train_val_test_splits = (0.8, 0.2, 0.0)
 
     # model architecture and training
-    input_length = 15
+    input_length = 15  # number of medications
     truncate_whole_visits = False
     embed_size = 40
     attention_lstm_size = 128
