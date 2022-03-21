@@ -310,11 +310,15 @@ def main(preprocessed_mimic_filepath, output_directory):
     # Hyperparameters
     # =========================================================================
 
-    # data preparation
+    # dataset filtering - these parameters MUST be identical across all scripts
     use_truncated_codes = True
     proportion_event_instances = 0.9  # {0.5, 0.8, 0.9, 0.95, 0.99}
-    admissions_per_patient_incl_min = 2
-    train_val_test_splits = (0.8, 0.2, 0.0)
+    admissions_per_patient_incl_min = 1
+    medications_per_patient_incl_min = 50  # patients with less will be excluded entirely
+    medications_per_patient_incl_max = 100  # patients with more or equal will have early medications truncated
+
+    # data processing
+    train_val_test_splits = (0.8, 0.1, 0.1)  # MUST be identical across all scripts
 
     # model architecture and training
     embed_size = 200
@@ -323,7 +327,7 @@ def main(preprocessed_mimic_filepath, output_directory):
     dropout_rate_context = 0.0
     l2_factor = 0.0
     batch_size = 32
-    n_epochs = 600
+    n_epochs = 60
 
     # checks and derived hyperparameters
     event_code_col_name = "event_code_trunc" if use_truncated_codes else "event_code_full"
@@ -341,10 +345,10 @@ def main(preprocessed_mimic_filepath, output_directory):
         (False, 0.95): 350,
         (False, 0.99): 59}  # values derived from cumulative_event_count_medications plots
     event_code_count_incl_min = selector_dict[(use_truncated_codes, proportion_event_instances)]
-    assert sum(train_val_test_splits) == 1
+    assert abs(1 - sum(train_val_test_splits)) < 0.00001
 
     # =========================================================================
-    # Data loading and preparation
+    # Data loading and standardized filtering
     # =========================================================================
 
     print("[INFO] Loading and preparing data")
@@ -359,8 +363,25 @@ def main(preprocessed_mimic_filepath, output_directory):
     # keep only patients with enough admissions
     mimic_df = mimic_df[mimic_df["patient_admission_count"] >= admissions_per_patient_incl_min]
 
+    # keep only patients with enough medications
+    mimic_df = mimic_df[mimic_df["patient_medications_count"] >= medications_per_patient_incl_min]
+
+    # truncate earliest medications for patients with too many medications
+    truncated_patient_dfs = []
+    for patient_id, patient_df in mimic_df.groupby("patient_id", sort=False):
+        truncated_patient_dfs.append(patient_df.iloc[-1 * medications_per_patient_incl_max:])
+    mimic_df = pd.concat(truncated_patient_dfs, axis=0)
+
+    # =========================================================================
+    # Further script-specific data preparation
+    # =========================================================================
+
     # map string NDC codes to integer indices
-    code_idx_to_str_map = ["OUTCOME_SURVIVAL", "OUTCOME_MORTALITY"]  # padding represented by index n_codes
+    # padding is represented by the categorical index n_codes (the last index)
+    # note that the mapping between meaning and categorical index for RETAIN
+    # differs from that used by the LSTM, so LSTM predictions should be first
+    # translated to NDC codes before being input into RETAIN
+    code_idx_to_str_map = ["OUTCOME_SURVIVAL", "OUTCOME_MORTALITY"]
     code_idx_to_str_map.extend(list(mimic_df[event_code_col_name].value_counts().index))
     n_codes = len(code_idx_to_str_map)
     code_str_to_idx_map = dict([(code_str, code_idx) for code_idx, code_str in enumerate(code_idx_to_str_map)])
@@ -375,26 +396,53 @@ def main(preprocessed_mimic_filepath, output_directory):
         for admission_id, admission_df in patient_df.groupby("admission_id", sort=False):
             patient_admissions.append(list(admission_df["event_code_idx"]))
         patients_nested.append(patient_admissions)
+        
+    # determine average and stdev number of admissions/medications for surviving/mortality patients
+    # it is desirable for the distributions to be similar for the two groups
+    # otherwise RETAIN can overfit on the length of input sequence
+    admission_counts_survival = []
+    admission_counts_mortality = []
+    medication_counts_survival = []
+    medication_counts_mortality = []
+    for patient_admissions, patient_mortality in zip(patients_nested, patient_mortalities):
+        if patient_mortality:
+            admission_counts_mortality.append(len(patient_admissions))
+            medication_counts_mortality.append(sum([len(admission_events) for admission_events in patient_admissions]))
+        else:
+            admission_counts_survival.append(len(patient_admissions))
+            medication_counts_survival.append(sum([len(admission_events) for admission_events in patient_admissions]))
 
     print(f"[INFO] Number of different medical codes: {n_codes}")
     print(f"[INFO] Number of patients: {len(patients_nested)}")
     print(f"[INFO] Average patient mortality rate: {np.mean(patient_mortalities)}")
-
+    print(f"[INFO] Number of admissions for surviving patients: "
+          f"mean {np.around(np.mean(admission_counts_survival), 2)}, "
+          f"std {np.around(np.std(admission_counts_survival), 2)}")
+    print(f"[INFO] Number of admissions for mortality patients: "
+          f"mean {np.around(np.mean(admission_counts_mortality), 2)}, "
+          f"std {np.around(np.std(admission_counts_mortality), 2)}")
+    print(f"[INFO] Number of medications for surviving patients: "
+          f"mean {np.around(np.mean(medication_counts_survival), 2)}, "
+          f"std {np.around(np.std(medication_counts_survival), 2)}")
+    print(f"[INFO] Number of medications for mortality patients: "
+          f"mean {np.around(np.mean(medication_counts_mortality), 2)}, "
+          f"std {np.around(np.std(medication_counts_mortality), 2)}")
+    
     # split train/val/test
     patients_nested_np_ragged = np.array(patients_nested)
     patient_mortalities_np = np.array(patient_mortalities)
     n_train = int(len(patients_nested) * train_val_test_splits[0])
     n_val = int(len(patients_nested) * train_val_test_splits[1])
     n_test = int(len(patients_nested) - (n_train + n_val))
-    rng = np.random.default_rng()
+    rng = np.random.default_rng(seed=12345)
     train_val_test_indexer = np.array([0] * n_train + [1] * n_val + [2] * n_test)
     rng.shuffle(train_val_test_indexer)  # in-place
     patients_nested_train_np_ragged = patients_nested_np_ragged[train_val_test_indexer == 0]
     patient_mortalities_train_np = patient_mortalities_np[train_val_test_indexer == 0]
     patients_nested_val_np_ragged = patients_nested_np_ragged[train_val_test_indexer == 1]
     patient_mortalities_val_np = patient_mortalities_np[train_val_test_indexer == 1]
-    patients_nested_test_np_ragged = patients_nested_np_ragged[train_val_test_indexer == 2]
-    patient_mortalities_test_np = patient_mortalities_np[train_val_test_indexer == 2]
+    # patients_nested_test_np_ragged = patients_nested_np_ragged[train_val_test_indexer == 2]
+    # patient_mortalities_test_np = patient_mortalities_np[train_val_test_indexer == 2]
 
     # finagle data so that it works with the RETAIN code
     data_train = [patients_nested_train_np_ragged]
@@ -410,14 +458,14 @@ def main(preprocessed_mimic_filepath, output_directory):
     ARGS.emb_size = embed_size
     ARGS.epochs = n_epochs
     ARGS.workers = 4
-    ARGS.n_steps = 300  # truncate patients after 300 admissions
+    ARGS.n_steps = 300  # truncate patients after 300 admissions (not applicable since no patients have that many)
     ARGS.recurrent_size = lstm_size
     ARGS.batch_size = batch_size
     ARGS.dropout_input = dropout_rate_input
     ARGS.dropout_context = dropout_rate_context
     ARGS.l2 = l2_factor
     ARGS.directory = output_directory
-    ARGS.allow_negative = False  # don't allow negative attention weights
+    ARGS.allow_negative = True  # allow negative attention weights (consistent with original paper)
 
     print('Creating Model')
     model = model_create(ARGS)

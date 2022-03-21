@@ -66,22 +66,26 @@ def main(preprocessed_mimic_filepath, output_directory):
     # Hyperparameters
     # =========================================================================
 
-    # data preparation
+    # dataset filtering - these parameters MUST be identical across all scripts
     use_truncated_codes = True
     proportion_event_instances = 0.9  # {0.5, 0.8, 0.9, 0.95, 0.99}
-    medications_per_patient_incl_min = 15
-    use_separator_token = False
-    probe_length = 3
-    train_val_test_splits = (0.8, 0.2, 0.0)
+    admissions_per_patient_incl_min = 1
+    medications_per_patient_incl_min = 50  # patients with less will be excluded entirely
+    medications_per_patient_incl_max = 100  # patients with more or equal will have early medications truncated
+
+    # data processing
+    use_separator_token = True  # MUST be true for output to be usable as RETAIN input!
+    truncate_whole_visits = False
+    probe_length = 10  # MUST be identical to probe_length used in run_virtual_experiments.py
+    train_val_test_splits = (0.8, 0.1, 0.1)  # MUST be identical across all scripts
 
     # model architecture and training
-    input_length = 15  # number of medications
-    truncate_whole_visits = False
+    input_length = 100  # MUST be identical to input_length used in train_lstm_on_mimic.py
     embed_size = 40
     attention_lstm_size = 128
     predictor_lstm_size = 128
     batch_size = 128
-    n_epochs = 600
+    n_epochs = 60
 
     # checks and derived hyperparameters
     event_code_col_name = "event_code_trunc" if use_truncated_codes else "event_code_full"
@@ -99,10 +103,10 @@ def main(preprocessed_mimic_filepath, output_directory):
         (False, 0.95): 350,
         (False, 0.99): 59}  # values derived from cumulative_event_count_medications plots
     event_code_count_incl_min = selector_dict[(use_truncated_codes, proportion_event_instances)]
-    assert sum(train_val_test_splits) == 1
+    assert abs(1 - sum(train_val_test_splits)) < 0.00001
 
     # =========================================================================
-    # Data loading and preparation
+    # Data loading and standardized filtering
     # =========================================================================
 
     print("[INFO] Loading and preparing data")
@@ -114,8 +118,21 @@ def main(preprocessed_mimic_filepath, output_directory):
     # keep only most common medications
     mimic_df = mimic_df[mimic_df[event_code_count_col_name] >= event_code_count_incl_min]
 
+    # keep only patients with enough admissions
+    mimic_df = mimic_df[mimic_df["patient_admission_count"] >= admissions_per_patient_incl_min]
+
     # keep only patients with enough medications
     mimic_df = mimic_df[mimic_df["patient_medications_count"] >= medications_per_patient_incl_min]
+
+    # truncate earliest medications for patients with too many medications
+    truncated_patient_dfs = []
+    for patient_id, patient_df in mimic_df.groupby("patient_id", sort=False):
+        truncated_patient_dfs.append(patient_df.iloc[-1 * medications_per_patient_incl_max:])
+    mimic_df = pd.concat(truncated_patient_dfs, axis=0)
+
+    # =========================================================================
+    # Further script-specific data preparation
+    # =========================================================================
 
     # map string NDC codes to integer indices
     code_idx_to_str_map = ["PADDING", "OUTCOME_SURVIVAL", "OUTCOME_MORTALITY"]
@@ -209,7 +226,7 @@ def main(preprocessed_mimic_filepath, output_directory):
     n_train = int(len(patients_seq_x_np) * train_val_test_splits[0])
     n_val = int(len(patients_seq_x_np) * train_val_test_splits[1])
     n_test = int(len(patients_seq_x_np) - (n_train + n_val))
-    rng = np.random.default_rng()
+    rng = np.random.default_rng(seed=12345)
     train_val_test_indexer = np.array([0] * n_train + [1] * n_val + [2] * n_test)
     rng.shuffle(train_val_test_indexer)  # in-place
     patients_seq_x_train_np = patients_seq_x_np[train_val_test_indexer == 0]
@@ -219,8 +236,8 @@ def main(preprocessed_mimic_filepath, output_directory):
     patients_seq_y_val_np = patients_seq_y_np[train_val_test_indexer == 1]
     masks_y_val_np = masks_y_np[train_val_test_indexer == 1]
     patients_seq_x_test_np = patients_seq_x_np[train_val_test_indexer == 2]
-    patients_seq_y_test_np = patients_seq_y_np[train_val_test_indexer == 2]
-    masks_y_test_np = masks_y_np[train_val_test_indexer == 2]
+    # patients_seq_y_test_np = patients_seq_y_np[train_val_test_indexer == 2]
+    # masks_y_test_np = masks_y_np[train_val_test_indexer == 2]
 
     # =========================================================================
     # Model construction
@@ -271,6 +288,40 @@ def main(preprocessed_mimic_filepath, output_directory):
 
     # reload the best weights
     model.load_weights(output_directory + '/weight-best.h5')
+
+    # save the model
+    model.save(output_directory + '/lstm_model')
+
+    # =========================================================================
+    # Profiling characteristics of trained model
+    # =========================================================================
+
+    print("[INFO] Profiling characteristics of trained model")
+
+    # How often does the model predict patient mortality? survival? neither?
+    test_predictions_np = model.predict(x=patients_seq_x_test_np, batch_size=batch_size)  # (?, input_length, n_codes)
+    test_predictions_np = test_predictions_np[:, probe_length-1:, :]
+    test_predictions_np = np.argmax(test_predictions_np, axis=2)
+    n_predicted_outcome_survival = 0
+    n_predicted_outcome_mortality = 0
+    n_predicted_outcome_neither = 0
+    for patient_codes in test_predictions_np:
+        outcome_predicted = False
+        for code in patient_codes:
+            if code == code_str_to_idx_map["OUTCOME_SURVIVAL"]:
+                n_predicted_outcome_survival += 1
+                outcome_predicted = True
+                break
+            elif code == code_str_to_idx_map["OUTCOME_MORTALITY"]:
+                n_predicted_outcome_mortality += 1
+                outcome_predicted = True
+                break
+        if not outcome_predicted:
+            n_predicted_outcome_neither += 1
+    print(f"[INFO] Distribution of outcome predictions: "
+          f"{np.around(100 * n_predicted_outcome_survival / n_test, 2)}% survival, "
+          f"{np.around(100 * n_predicted_outcome_mortality / n_test, 2)}% mortality, "
+          f"{np.around(100 * n_predicted_outcome_neither / n_test, 2)}% no outcome")
 
 
 def parse_arguments():
