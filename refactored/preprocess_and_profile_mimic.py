@@ -181,7 +181,7 @@ def main(
         diagnoses_filepath,
         procedures_filepath,
         prescriptions_filepath,
-        out_directory):
+        output_directory):
 
     # -------------------------------------------------------------------------
     # build raw data maps
@@ -405,7 +405,7 @@ def main(
         title = f"cumulative_event_count_{name}"
         plt.title(title)
         plt.tight_layout()
-        plt.savefig(os.path.join(out_directory, f"{title}.png"))
+        plt.savefig(os.path.join(output_directory, f"{title}.png"))
 
     # count number of patients with at least some minimum number of admissions, diagnoses, procedures
     for name, counts in [
@@ -440,7 +440,7 @@ def main(
         title = f"cumulative_patient_counts_min_{name}"
         ax.set_title(title)
         fig.tight_layout()
-        fig.savefig(os.path.join(out_directory, f"{title}.png"))
+        fig.savefig(os.path.join(output_directory, f"{title}.png"))
 
     # -------------------------------------------------------------------------
     # save dataframe
@@ -464,7 +464,7 @@ def main(
     admission_columns = sorted(admission_columns)
     event_columns = sorted(event_columns)
     all_columns = patient_columns + admission_columns + event_columns
-    mimic_df[all_columns].to_csv(os.path.join(out_directory, "mimic_df.csv"))
+    mimic_df[all_columns].to_csv(os.path.join(output_directory, "mimic_df.csv"))
 
 
 def parse_arguments():
@@ -474,7 +474,7 @@ def parse_arguments():
     parser.add_argument('--diagnoses_filepath', type=str, required=True)
     parser.add_argument('--procedures_filepath', type=str, required=True)
     parser.add_argument('--prescriptions_filepath', type=str, required=True)
-    parser.add_argument('--out_directory', type=str, required=True)
+    parser.add_argument('--output_directory', type=str, required=True)
     args = parser.parse_args()
     return args
 
@@ -487,4 +487,4 @@ if __name__ == '__main__':
         args.diagnoses_filepath,
         args.procedures_filepath,
         args.prescriptions_filepath,
-        args.out_directory)
+        args.output_directory)

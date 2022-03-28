@@ -1,5 +1,7 @@
 
 import argparse
+import os
+import time
 
 import keras as k
 import numpy as np
@@ -25,10 +27,14 @@ def main(preprocessed_mimic_filepath, ndc_interactions_filepath, lstm_model_file
     train_val_test_splits = (0.8, 0.1, 0.1)  # MUST be identical across all scripts
     n_probes = 128
     probe_length = 10  # MUST be identical to probe_length used in train_lstm_on_mimic.py
+    sampling_temperature = .95
 
     # lstm model parameters
     input_length = 100  # MUST be identical to input_length used in train_lstm_on_mimic.py
-    batch_size = 128
+    batch_size = 1028
+
+    # for debugging
+    n_interactions_to_run = None  # int to limit number, or None for all
 
     # checks and derived hyperparameters
     event_code_col_name = "event_code_trunc" if use_truncated_codes else "event_code_full"
@@ -47,6 +53,8 @@ def main(preprocessed_mimic_filepath, ndc_interactions_filepath, lstm_model_file
         (False, 0.99): 59}  # values derived from cumulative_event_count_medications plots
     event_code_count_incl_min = selector_dict[(use_truncated_codes, proportion_event_instances)]
     assert abs(1 - sum(train_val_test_splits)) < 0.00001
+    if n_interactions_to_run is not None:
+        print(f"[WARNING] Only running virtual experiments for the first {n_interactions_to_run} interactions")
 
     # =========================================================================
     # Data loading and standardized filtering
@@ -86,39 +94,6 @@ def main(preprocessed_mimic_filepath, ndc_interactions_filepath, lstm_model_file
     code_str_to_idx_map = dict([(code_str, code_idx) for code_idx, code_str in enumerate(code_idx_to_str_map)])
     mimic_df["event_code_idx"] = mimic_df[event_code_col_name].map(code_str_to_idx_map)
 
-    # # unpack dataframe into nested list: [patient_idx, admission_idx, event_idx]
-    # patients_nested = []
-    # patient_mortalities = []
-    # for patient_id, patient_df in mimic_df.groupby("patient_id", sort=False):
-    #     patient_mortalities.append(patient_df["patient_mortality"].iloc[0])
-    #     patient_admissions = []
-    #     for admission_id, admission_df in patient_df.groupby("admission_id", sort=False):
-    #         patient_admissions.append(list(admission_df["event_code_idx"]))
-    #     patients_nested.append(patient_admissions)
-    #
-    # # flatten each patient into a sequence: [patient_idx, event_idx]
-    # # include separator tokens between visits
-    # patients_seq = []
-    # for patient_admissions, patient_mortality in zip(patients_nested, patient_mortalities):
-    #     patient_seq = []
-    #     for admission_events in patient_admissions:
-    #         patient_seq.extend(admission_events)
-    #         if use_separator_token:
-    #             patient_seq.append(code_str_to_idx_map["SEPARATOR"])
-    #     patients_seq.append(patient_seq)
-    #
-    # # split train/val/test
-    # patients_seq_np_ragged = np.array(patients_seq)
-    # patient_mortalities_np = np.array(patient_mortalities)
-    # n_train = int(len(patients_nested) * train_val_test_splits[0])
-    # n_val = int(len(patients_nested) * train_val_test_splits[1])
-    # n_test = int(len(patients_nested) - (n_train + n_val))
-    # rng = np.random.default_rng(seed=12345)
-    # train_val_test_indexer = np.array([0] * n_train + [1] * n_val + [2] * n_test)
-    # rng.shuffle(train_val_test_indexer)  # in-place
-    # patients_seq_test_np_ragged = patients_seq_np_ragged[train_val_test_indexer == 2]
-    # patient_mortalities_test_np = patient_mortalities_np[train_val_test_indexer == 2]
-
     # load interactions (original data from drugbank, translated to NDC codes)
     ndc_interactions_df = pd.read_csv(ndc_interactions_filepath, dtype={"ndc_a": str, "ndc_b": str})
     ndc_interactions_df = ndc_interactions_df[ndc_interactions_df["mapping_successful"]]
@@ -137,6 +112,8 @@ def main(preprocessed_mimic_filepath, ndc_interactions_filepath, lstm_model_file
     interaction_index_pairs = []  # List[Tuple[int, int]]
     for _, row in ndc_interactions_df.iterrows():
         interaction_index_pairs.append((int(row["event_code_idx_a"]), int(row["event_code_idx_b"])))
+    if n_interactions_to_run is not None:
+        interaction_index_pairs = interaction_index_pairs[:n_interactions_to_run]
     n_interactions = len(interaction_index_pairs)
 
     # =========================================================================
@@ -177,6 +154,7 @@ def main(preprocessed_mimic_filepath, ndc_interactions_filepath, lstm_model_file
     probe_sequences_np = np.full(
         shape=(2 * n_interactions, n_probes, 3, input_length),
         fill_value=code_str_to_idx_map["PADDING"])
+    probe_sequence_swap_indices_np = np.zeros(shape=(2 * n_interactions, n_probes, 2))
     for interaction_idx, (interacting_code_idx_a, interacting_code_idx_b) in enumerate(interaction_index_pairs):
         # compute probability distribution for generating random codes
         code_value_counts_adjusted_np = np.copy(code_value_counts_np)
@@ -191,6 +169,7 @@ def main(preprocessed_mimic_filepath, ndc_interactions_filepath, lstm_model_file
             swap_idx_a, swap_idx_b = rng.choice(probe_length, size=(2,), replace=False)
             probe_sequences_np[interaction_idx, probe_idx, [0, 2], swap_idx_a] = interacting_code_idx_a
             probe_sequences_np[interaction_idx, probe_idx, [1, 2], swap_idx_b] = interacting_code_idx_b
+            probe_sequence_swap_indices_np[interaction_idx, probe_idx] = [swap_idx_a, swap_idx_b]
 
     # =========================================================================
     # Run virtual experiments
@@ -198,44 +177,89 @@ def main(preprocessed_mimic_filepath, ndc_interactions_filepath, lstm_model_file
 
     print("[INFO] Extending probe sequences using LSTM")
 
-    print(probe_sequences_np.shape)
-
-    print(probe_sequences_np[0, 0, 0])
-    print(probe_sequences_np[0, 0, 1])
-    print(probe_sequences_np[0, 0, 2])
-    print("")
-
-    # import time
-    # start_time = time.time()
-
     # use LSTM to extend probe sequences
     lstm_model = k.models.load_model(lstm_model_filepath, compile=False)
-    probe_sequences_chunks = list(probe_sequences_np)  # need to do one at a time because memory constraints
-    probe_sequences_chunks_completed = []
-    for chunk_idx, probe_sequences_chunk_np in enumerate(probe_sequences_chunks):
-
-        # try:
-        #     print(((time.time() - start_time) * (len(probe_sequences_chunks) - chunk_idx) / chunk_idx) / 3600)
-        # except:
-        #     pass
-
-        probe_sequences_chunk_np = probe_sequences_chunk_np.reshape((-1, input_length))
+    interaction_probe_sequences = list(probe_sequences_np)  # need to do one at a time because memory constraints
+    interaction_probe_sequences_completed = []
+    start_time = time.time()
+    for interaction_idx, interaction_probe_sequences_np in enumerate(interaction_probe_sequences):
+        if (interaction_idx - 1) % 10 == 0:
+            estimated_time_remaining = (
+                (time.time() - start_time) * (len(interaction_probe_sequences) - interaction_idx) / interaction_idx)
+            print(f"[INFO] Estimated time remaining: {np.around(estimated_time_remaining / 3600, 2)} hours")
+        interaction_probe_sequences_np = interaction_probe_sequences_np.reshape((-1, input_length))
         for prediction_timestep_idx in range(probe_length, input_length):
-            lstm_predictions = lstm_model.predict(x=probe_sequences_chunk_np, batch_size=batch_size)
-            probe_sequences_chunk_np[:, prediction_timestep_idx] = np.argmax(
-                lstm_predictions[:, prediction_timestep_idx - 1, :], axis=1)
+            # original probability weights for next timestep from LSTM
+            lstm_predictions = lstm_model.predict(x=interaction_probe_sequences_np, batch_size=batch_size)
+            lstm_predictions = lstm_predictions[:, prediction_timestep_idx - 1, :]
+            # adjust probability weights using sampling_temperature
+            lstm_predictions = np.exp(np.log(lstm_predictions) / sampling_temperature)
+            # parallelized random sampling
+            lstm_predictions = np.cumsum(lstm_predictions, axis=1)
+            lstm_predictions = lstm_predictions / lstm_predictions[:, -1:]
+            lstm_predictions = np.sum(lstm_predictions < rng.uniform(size=(lstm_predictions.shape[0], 1)), axis=1)
+            # add samples to the sequence
+            interaction_probe_sequences_np[:, prediction_timestep_idx] = lstm_predictions
+        interaction_probe_sequences_np = interaction_probe_sequences_np.reshape((n_probes, 3, input_length))
+        interaction_probe_sequences_completed.append(interaction_probe_sequences_np)
 
-            print(probe_sequences_chunk_np[0])
+    # =========================================================================
+    # Format and save virtual experiments output
+    # =========================================================================
 
-        probe_sequences_chunk_np = probe_sequences_chunk_np.reshape((n_probes, 3, input_length))
-        probe_sequences_chunks_completed.append(probe_sequences_chunk_np)
-    probe_sequences_completed_np = np.concatenate(probe_sequences_chunks_completed, axis=0)
+    print("[INFO] Formatting and saving virtual experiments results")
 
-    print(probe_sequences_completed_np[0, 0, 0])
-    print(probe_sequences_completed_np[0, 0, 1])
-    print(probe_sequences_completed_np[0, 0, 2])
+    interaction_ids = []
+    interaction_event_codes_a = []
+    interaction_event_codes_b = []
+    interaction_is_real = []
+    patient_ids = []
+    patient_types = []  # List[{"a", "b", "both"}]
+    admission_ids = []
+    event_codes = []
 
+    patient_id = 0
+    admission_id = 0
+    for interaction_id, (sequences_completed_np, code_index_pair, is_real) in enumerate(
+            zip(interaction_probe_sequences_completed, interaction_index_pairs, interaction_index_pair_is_real)):
+        interaction_event_code_a = code_idx_to_str_map[code_index_pair[0]]
+        interaction_event_code_b = code_idx_to_str_map[code_index_pair[1]]
+        for three_sequences_np in sequences_completed_np:
+            for sequence, sequence_type in zip(three_sequences_np, ["a", "b", "both"]):
+                for code_idx in sequence:
+                    code_str = code_idx_to_str_map[code_idx]
+                    if code_str == "PADDING":
+                        continue
+                    elif (code_str == "OUTCOME_SURVIVAL") or (code_str == "OUTCOME_MORTALITY"):
+                        admission_id += 1
+                        break
+                    elif code_str == "SEPARATOR":
+                        admission_id += 1
+                        continue
+                    else:
+                        interaction_ids.append(interaction_id)
+                        interaction_event_codes_a.append(interaction_event_code_a)
+                        interaction_event_codes_b.append(interaction_event_code_b)
+                        interaction_is_real.append(is_real)
+                        patient_ids.append(patient_id)
+                        patient_types.append(sequence_type)
+                        admission_ids.append(admission_id)
+                        event_codes.append(code_str)
+                admission_id += 1
+            patient_id += 1
 
+    virtual_experiments_df = pd.DataFrame({
+        "interaction_id": interaction_ids,
+        "interaction_event_code_a": interaction_event_codes_a,
+        "interaction_event_code_b": interaction_event_codes_b,
+        "interaction_is_real": interaction_is_real,
+        "patient_id": patient_ids,
+        "patient_type": patient_types,
+        "admission_id": admission_ids,
+        "event_code": event_codes,
+    })
+
+    virtual_experiments_df.to_csv(os.path.join(output_directory, "virtual_experiments_df.csv"))
 
 
 def parse_arguments():

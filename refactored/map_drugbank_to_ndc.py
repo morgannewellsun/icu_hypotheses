@@ -64,7 +64,7 @@ def main(
         prescriptions_filepath,
         drugbank_vocabulary_filepath,
         drugbank_interactions_filepath,
-        out_directory):
+        output_directory):
 
     # -------------------------------------------------------------------------
     # build raw data maps
@@ -109,7 +109,7 @@ def main(
         "drugbank_names": drugbank_name_lists,
         "ndc_code": drugbank_matched_ndc_codes,
         "ndc_names": drugbank_matched_ndc_name_lists})
-    drugbank_ndc_map_df.to_csv(os.path.join(out_directory, "drugbank_ndc_map_df.csv"))
+    drugbank_ndc_map_df.to_csv(os.path.join(output_directory, "drugbank_ndc_map_df.csv"))
 
     # -------------------------------------------------------------------------
     # translate drugbank interactions list to NDC codes
@@ -121,14 +121,11 @@ def main(
     interactions_db["ndc_a"] = interactions_db["drugbank_id_a"].map(drugbank_ndc_map)
     interactions_db["ndc_b"] = interactions_db["drugbank_id_b"].map(drugbank_ndc_map)
     interactions_db["mapping_successful"] = ~interactions_db[["ndc_a", "ndc_b"]].isnull().any(axis=1)
-    interactions_db.to_csv(os.path.join(out_directory, "ndc_interactions.csv"))
+    interactions_db.to_csv(os.path.join(output_directory, "ndc_interactions.csv"))
     n_mapped_interactions = np.sum(interactions_db["mapping_successful"])
     print(f"[INFO] {n_mapped_interactions} out of {n_interactions} "
           f"({(100 * n_mapped_interactions / n_interactions):.2f}%) "
           f"interactions successfully mapped")
-
-
-
 
 
 def parse_arguments():
@@ -136,7 +133,7 @@ def parse_arguments():
     parser.add_argument('--prescriptions_filepath', type=str, required=True)
     parser.add_argument('--drugbank_vocabulary_filepath', type=str, required=True)
     parser.add_argument('--drugbank_interactions_filepath', type=str, required=True)
-    parser.add_argument('--out_directory', type=str, required=True)
+    parser.add_argument('--output_directory', type=str, required=True)
     args = parser.parse_args()
     return args
 
@@ -147,4 +144,4 @@ if __name__ == '__main__':
         args.prescriptions_filepath,
         args.drugbank_vocabulary_filepath,
         args.drugbank_interactions_filepath,
-        args.out_directory)
+        args.output_directory)
