@@ -22,7 +22,7 @@ def main(preprocessed_mimic_filepath, input_data_filepath, retain_weights_filepa
     input_data_type = "virtual_experiments"  # {"virtual_experiments", "sample_and_swap"}
 
     # for debugging
-    interactions_to_run = 4  # int to limit number, or None for all
+    n_interactions_to_run = None  # int to limit number, or None for all
 
     # checks and derived hyperparameters
     event_code_col_name = "event_code_trunc" if use_truncated_codes else "event_code_full"
@@ -45,6 +45,8 @@ def main(preprocessed_mimic_filepath, input_data_filepath, retain_weights_filepa
         interpretation_visit_idx = 0
     else:  # input_data_type == "sample_and_swap":
         interpretation_visit_idx = -1
+    if n_interactions_to_run is not None:
+        print(f"[WARNING] Only running RETAIN interpretation for the first {n_interactions_to_run} interactions")
 
     # =========================================================================
     # Data loading and standardized filtering
@@ -96,7 +98,7 @@ def main(preprocessed_mimic_filepath, input_data_filepath, retain_weights_filepa
     data_nested = []  # (interactions, patients, 3, admissions, events)
     interactions_ran = 0
     for interaction_id, interaction_df in data_df.groupby("interaction_id", sort=False):
-        if (interactions_to_run is not None) and (interactions_ran >= interactions_to_run):
+        if (n_interactions_to_run is not None) and (interactions_ran >= n_interactions_to_run):
             break
         interactions_ran += 1
         interaction_code_idx_a = code_str_to_idx_map[interaction_df["interaction_event_code_a"].iloc[0]]
