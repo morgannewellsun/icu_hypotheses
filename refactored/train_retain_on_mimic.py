@@ -323,11 +323,11 @@ def main(preprocessed_mimic_filepath, output_directory):
     # model architecture and training
     embed_size = 256
     lstm_size = 256
-    dropout_rate_input = 0.0
+    dropout_rate_input = 0.0  # should be zero for this dataset
     dropout_rate_context = 0.0
-    l2_factor = 0.0
+    l2_factor = 0.001
     batch_size = 128
-    n_epochs = 60
+    n_epochs = 40
 
     # checks and derived hyperparameters
     event_code_col_name = "event_code_trunc" if use_truncated_codes else "event_code_full"
@@ -450,6 +450,12 @@ def main(preprocessed_mimic_filepath, output_directory):
     data_val = [patients_nested_val_np_ragged]
     y_val = patient_mortalities_val_np.astype(np.int64)
 
+    # delete old log file
+    try:
+        os.remove(os.path.join(output_directory, "log.txt"))
+    except FileNotFoundError:
+        pass
+
     # create argument namespace for RETAIN code
     ARGS = argparse.Namespace
     ARGS.num_codes = n_codes
@@ -467,12 +473,25 @@ def main(preprocessed_mimic_filepath, output_directory):
     ARGS.directory = output_directory
     ARGS.allow_negative = False  # Exception thrown if this is True for some reason, not sure why
 
+    # train RETAIN
     print('Creating Model')
     model = model_create(ARGS)
-
     print('Training Model')
     train_model(
         model=model, data_train=data_train, y_train=y_train, data_test=data_val, y_test=y_val, ARGS=ARGS)
+
+    # find and report epoch with best PR-AUC
+    best_epoch = 0
+    best_pr_auc = 0.0
+    with open(os.path.join(output_directory, "log.txt"), "r") as readfile:
+        readfile.readline()
+        for epoch, line in enumerate(readfile.readlines()):
+            splits = line.split("PR-AUC: ")
+            pr_auc = float(splits[-1])
+            if pr_auc > best_pr_auc:
+                best_epoch = epoch
+                best_pr_auc = pr_auc
+    print(f"[INFO] Epoch number {best_epoch} had the highest PR-AUC of {best_pr_auc}")
 
 
 def parse_arguments():
@@ -488,3 +507,38 @@ def parse_arguments():
 if __name__ == '__main__':
     args = parse_arguments()
     main(args.preprocessed_mimic_filepath, args.output_directory)
+
+
+"""
+GRID SEARCH FOR RETAIN PARAMETERS:
+
+embed_size, lstm_size, dropout_rate_context, l2_factor : best validation PR-AUC
+
+512, 512, 0.0, 0.001 : 0.796986
+512, 512, 0.2, 0.001 :
+512, 512, 0.4, 0.001 :
+
+512, 256, 0.0, 0.001 : 0.795547
+512, 256, 0.2, 0.001 : 
+512, 256, 0.4, 0.001 : 
+
+256, 512, 0.0, 0.001 : 0.791528
+256, 512, 0.2, 0.001 : 
+256, 512, 0.4, 0.001 : 
+
+256, 256, 0.0, 0.001 : 0.799791
+256, 256, 0.2, 0.001 : 0.798606
+256, 256, 0.4, 0.001 : 0.792274
+
+256, 128, 0.0, 0.001 : 0.796881
+256, 128, 0.2, 0.001 : 0.794085
+256, 128, 0.4, 0.001 : 0.793953
+
+128, 256, 0.0, 0.001 : 0.797035
+128, 256, 0.2, 0.001 : 0.795079
+128, 256, 0.4, 0.001 : 0.794217
+
+128, 128, 0.0, 0.001 : 0.796271
+128, 128, 0.2, 0.001 : 
+128, 128, 0.4, 0.001 : 
+"""
