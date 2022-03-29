@@ -321,12 +321,12 @@ def main(preprocessed_mimic_filepath, output_directory):
     train_val_test_splits = (0.8, 0.1, 0.1)  # MUST be identical across all scripts
 
     # model architecture and training
-    embed_size = 200
-    lstm_size = 200
+    embed_size = 256
+    lstm_size = 256
     dropout_rate_input = 0.0
     dropout_rate_context = 0.0
     l2_factor = 0.0
-    batch_size = 32
+    batch_size = 128
     n_epochs = 60
 
     # checks and derived hyperparameters
@@ -465,7 +465,7 @@ def main(preprocessed_mimic_filepath, output_directory):
     ARGS.dropout_context = dropout_rate_context
     ARGS.l2 = l2_factor
     ARGS.directory = output_directory
-    ARGS.allow_negative = True  # allow negative attention weights (consistent with original paper)
+    ARGS.allow_negative = False  # Exception thrown if this is True for some reason, not sure why
 
     print('Creating Model')
     model = model_create(ARGS)

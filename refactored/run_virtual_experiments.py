@@ -24,7 +24,6 @@ def main(preprocessed_mimic_filepath, ndc_interactions_filepath, lstm_model_file
 
     # probe sequence parameters
     use_separator_token = True  # MUST be true for output to be usable as RETAIN input!
-    train_val_test_splits = (0.8, 0.1, 0.1)  # MUST be identical across all scripts
     n_probes = 128
     probe_length = 10  # MUST be identical to probe_length used in train_lstm_on_mimic.py
     sampling_temperature = .95
@@ -52,7 +51,6 @@ def main(preprocessed_mimic_filepath, ndc_interactions_filepath, lstm_model_file
         (False, 0.95): 350,
         (False, 0.99): 59}  # values derived from cumulative_event_count_medications plots
     event_code_count_incl_min = selector_dict[(use_truncated_codes, proportion_event_instances)]
-    assert abs(1 - sum(train_val_test_splits)) < 0.00001
     if n_interactions_to_run is not None:
         print(f"[WARNING] Only running virtual experiments for the first {n_interactions_to_run} interactions")
 
