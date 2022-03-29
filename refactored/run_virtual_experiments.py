@@ -192,6 +192,8 @@ def main(preprocessed_mimic_filepath, ndc_interactions_filepath, lstm_model_file
             lstm_predictions = lstm_predictions[:, prediction_timestep_idx - 1, :]
             # adjust probability weights using sampling_temperature
             lstm_predictions = np.exp(np.log(lstm_predictions) / sampling_temperature)
+            # remove chance of sampling either of the interacting codes
+            lstm_predictions[:, interaction_index_pairs[interaction_idx]] = 0
             # parallelized random sampling
             lstm_predictions = np.cumsum(lstm_predictions, axis=1)
             lstm_predictions = lstm_predictions / lstm_predictions[:, -1:]
@@ -224,6 +226,7 @@ def main(preprocessed_mimic_filepath, ndc_interactions_filepath, lstm_model_file
         interaction_event_code_b = code_idx_to_str_map[code_index_pair[1]]
         for three_sequences_np in sequences_completed_np:
             for sequence, sequence_type in zip(three_sequences_np, ["a", "b", "both"]):
+                admission_code_indices = set()
                 for code_idx in sequence:
                     code_str = code_idx_to_str_map[code_idx]
                     if code_str == "PADDING":
@@ -233,8 +236,12 @@ def main(preprocessed_mimic_filepath, ndc_interactions_filepath, lstm_model_file
                         break
                     elif code_str == "SEPARATOR":
                         admission_id += 1
+                        admission_code_indices = set()
+                        continue
+                    elif code_idx in admission_code_indices:  # enforce uniqueness of events within visits
                         continue
                     else:
+                        admission_code_indices.add(code_idx)
                         interaction_ids.append(interaction_id)
                         interaction_event_codes_a.append(interaction_event_code_a)
                         interaction_event_codes_b.append(interaction_event_code_b)
