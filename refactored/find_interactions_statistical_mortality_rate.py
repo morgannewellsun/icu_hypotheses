@@ -171,8 +171,9 @@ def main(preprocessed_mimic_filepath, ndc_interactions_filepath, output_director
     interaction_scores = []
     for mortality_rate_only_a, mortality_rate_only_b, mortality_rate_both in zip(
             mortality_rates_only_a, mortality_rates_only_b, mortality_rates_both):
-        interaction_scores.append(max(0, mortality_rate_both - max(mortality_rate_only_a, mortality_rate_only_b)))
+        interaction_scores.append(mortality_rate_both - max(mortality_rate_only_a, mortality_rate_only_b))
     interaction_scores = np.array(interaction_scores)
+    interaction_scores -= min(interaction_scores)
     interaction_scores /= max(interaction_scores)
 
     # precision recall

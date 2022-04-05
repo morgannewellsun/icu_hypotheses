@@ -19,7 +19,7 @@ def main(preprocessed_mimic_filepath, input_data_filepath, retain_weights_filepa
 
     # parameters for running RETAIN interpretations
     batch_size = 128
-    input_data_type = "virtual_experiments"  # {"virtual_experiments", "sample_and_swap"}
+    input_data_type = "sample_and_swap"  # {"virtual_experiments", "sample_and_swap"}
 
     # for debugging
     n_interactions_to_run = None  # int to limit number, or None for all
@@ -149,6 +149,9 @@ def main(preprocessed_mimic_filepath, input_data_filepath, retain_weights_filepa
     interaction_patient_importances = []  # (interactions, patients, [only_a, only_b, both_a, both_b])
     interaction_patient_mortality_probs = []  # (interactions, patients, [only_a, only_b, both])
     for interaction_idx in range(n_interactions):
+
+        print(interaction_idx)
+
         interaction_code_idx_a, interaction_code_idx_b = interaction_code_idx_pairs[interaction_idx]
         interaction_code_str_a = code_idx_to_str_map[interaction_code_idx_a]
         interaction_code_str_b = code_idx_to_str_map[interaction_code_idx_b]

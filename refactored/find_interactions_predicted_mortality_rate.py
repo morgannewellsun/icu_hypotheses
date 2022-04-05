@@ -13,9 +13,11 @@ def main(retain_interpretations_filepath, input_data_type, output_directory):
     retain_df = pd.read_csv(retain_interpretations_filepath)
 
     # did the predicted mortality rate go up when combining the two medications?
-    retain_df["mortality_prob_increased"] = (
-        (retain_df["mortality_prob_only_a"] < retain_df["mortality_prob_both"])
-        & (retain_df["mortality_prob_only_b"] < retain_df["mortality_prob_both"]))
+    retain_df["mortality_prob_max"] = retain_df[["mortality_prob_only_a", "mortality_prob_only_b"]].max(axis=1)
+    # retain_df["mortality_prob_increased"] = (
+    #     (retain_df["mortality_prob_only_a"] < retain_df["mortality_prob_both"])
+    #     & (retain_df["mortality_prob_only_b"] < retain_df["mortality_prob_both"]))
+    retain_df["mortality_prob_increased"] = retain_df["mortality_prob_both"] - retain_df["mortality_prob_max"]
 
     # aggregate across all patients for each interaction
     interaction_scores = []
