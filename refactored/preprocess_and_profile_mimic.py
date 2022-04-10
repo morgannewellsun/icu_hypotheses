@@ -385,7 +385,7 @@ def main(
         event_counts_sorted = sorted(event_counts, reverse=True)
         cumulative_event_distribution = np.cumsum(event_counts_sorted)
         cumulative_event_distribution = cumulative_event_distribution / cumulative_event_distribution[-1]
-        plt.figure(figsize=(20, 10))
+        plt.figure(figsize=(14, 7))
         plt.plot(range(1, len(cumulative_event_distribution) + 1), cumulative_event_distribution)
         plt.xlim((1, len(cumulative_event_distribution) + 1))
         plt.ylim((0, 1))
@@ -414,7 +414,7 @@ def main(
         ("procedures", patient_procedures_counts),
         ("medications", patient_medications_counts),
     ]:
-        fig, ax = plt.subplots(figsize=(10, 10))
+        fig, ax = plt.subplots(figsize=(7, 7))
         hist, bin_edges = np.histogram(
             counts,
             bins=np.arange(0.5, max(counts) + 0.51))
@@ -426,7 +426,7 @@ def main(
         xticks = [data_x[0]]
         yticks = [data_y[0]]
         for xvalue, yvalue in zip(data_x[1:], data_y[1:]):
-            if yvalue < 0.85 * yticks[-1]:
+            if yvalue < 0.8 * yticks[-1]:
                 yticks.append(yvalue)
                 if xvalue > (max(counts) / 50) + xticks[-1]:
                     xticks.append(xvalue)
